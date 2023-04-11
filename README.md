@@ -4,9 +4,6 @@
 <!-- inline html -->
 <!-- markdownlint-disable-file MD033 -->
 
-
-
-
 [![Crates.io](https://img.shields.io/crates/v/roosty_clock.svg)](https://crates.io/crates/roosty_clock)
 [![Docs](https://docs.rs/roosty_clock/badge.svg)](https://docs.rs/roosty_clock)
 [![dependency status](https://deps.rs/repo/github/mendelsshop/roosty-clock/status.svg)](https://deps.rs/repo/github/mendelsshop/roosty-clock)
@@ -19,9 +16,8 @@
 
 # 🐓 `roosty clock` 🕒
 
-
 ## About
 
 `roosty clock` is a simple alarm clock written in Rust.
 
-The `roost` part of the name is a reference to rust as well as a rooster, which is a common alarm clock in the morning.
+The `roosty` part of the name is a reference to rust as well as a rooster, which is a common alarm clock in the morning.

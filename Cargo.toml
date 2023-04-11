@@ -1,11 +1,23 @@
 [package]
 name = "roosty_clock"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/mendelsshop/roosty-clock"
+readme = "README.md"
 description = "A simple alarm clock"
+categories = ["date-and-time"]
+keywords = ["rooster", "alarm", "clock", "alarm-clock"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# gui crates
+eframe = {version = "0.21.3", features = ["dark-light"]}
+# time crates
+chrono = "0.4.24"
+# logging crates
+simple_file_logger = "0.3.1"
+log = "0.4.17"
+
+# TODO: sound crates
