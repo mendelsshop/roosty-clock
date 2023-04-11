@@ -10,6 +10,8 @@ on:
 name: clippy&fmt
 jobs:
   lint:
+    strategy:
+      fail-fast: false
     name: Lint
     runs-on: ubuntu-latest
     steps:
