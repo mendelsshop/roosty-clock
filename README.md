@@ -9,9 +9,9 @@
 
 [![Crates.io](https://img.shields.io/crates/v/roosty_clock.svg)](https://crates.io/crates/roosty_clock)
 [![Docs](https://docs.rs/roosty_clock/badge.svg)](https://docs.rs/roosty_clock)
-[![dependency status](https://deps.rs/repo/github/mendelsshop/roosty_clock/status.svg)](https://deps.rs/repo/github/mendelsshop/roosty_clock)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/mendelsshop/roosty_clock/blob/master/LICENSE)
-[![LOC](https://tokei.rs/b1/github/mendelsshop/roosty_clock)](https://github.com/mendelsshop/roosty_clock)
+[![dependency status](https://deps.rs/repo/github/mendelsshop/roosty-clock/status.svg)](https://deps.rs/repo/github/mendelsshop/roosty-clock)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/mendelsshop/roosty-clock/blob/master/LICENSE)
+[![LOC](https://tokei.rs/b1/github/mendelsshop/roosty-clock)](https://github.com/mendelsshop/roosty-clock)
 [![Downloads](https://img.shields.io/crates/d/roosty_clock.svg)](https://crates.io/crates/roosty_clock)
 ![MSRV](./resources/msrv.svg)
 
