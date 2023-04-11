@@ -2,6 +2,9 @@
 name = "roosty_clock"
 version = "0.0.0"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/mendelsshop/roosty-clock"
+description = "A simple alarm clock"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
