@@ -1,0 +1,45 @@
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "*"
+  pull_request:
+
+name: clippy&fmt
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      # make sure all code has been formatted with rustfmt
+      - name: rustfmt
+        run: |
+          rustup component add rustfmt
+          cargo fmt --all
+
+      - name: Commit files  
+        run: |
+          git config --local user.name  ${{ github.actor }}
+          git add .
+          git commit -m "cargo formatted: ${{ github.event.commits[0].message }}"
+         
+      - name: Push changes  # push the output folder to your repo
+        uses: ad-m/github-push-action@master
+        with: 
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{  github.head_ref || github.ref_name }}
+
+      # run clippy to verify we have no warnings
+      - run: cargo fetch
+      - name: cargo clippy
+        run: |
+          rustup component add clippy
+          cargo clippy --all-targets --all-features -- -D warnings
