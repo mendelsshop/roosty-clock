@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use eframe::{run_native};
+use eframe::run_native;
 use roosty_clock::App;
 
 fn main() -> Result<(), Box<dyn Error>> {
