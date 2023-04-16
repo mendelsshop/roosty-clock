@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     run_native(
         "Roosty Clock",
         native_options,
-        Box::new(|cc| {
+        Box::new(|_| {
             Box::new(App::new(
                 "%r".to_string(), // rn will just use time with am/pm as default
             ))
