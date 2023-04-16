@@ -54,19 +54,19 @@ impl App {
 
     // TODO: remove staticly set vec2s
     fn render_alarm_creation(&mut self, ctx: &egui::Context) {
-        Window::new("adding alarm")
-            .fixed_size(vec2(200.0, 50.0))
+        Window::new("adding alarm") 
+            .fixed_size(vec2(170.0, 30.0))
             .show(ctx, |ui| {
                 let mut text_input_name = String::new();
                 ui.horizontal(|ui| {
                     ui.label("name: ");
                     ui.text_edit_singleline(&mut text_input_name);
                 });
-                ui.separator();
+                //                 ui.separator();
                 ui.horizontal(|ui| {
                     // time selector
                     ui.vertical(|ui| {
-                        ui.set_max_size(vec2(95.0, 115.0));
+                        // ui.set_max_size(vec2(95.0, 115.0));
                         ui.horizontal(|ui| {
                             // hour selector
                             ui.vertical(|ui| {
@@ -82,7 +82,7 @@ impl App {
                                 });
                             });
 
-                            ui.add(Separator::default().vertical());
+                            //                             ui.add(Separator::default().vertical());
                             // minute selector
                             ui.vertical(|ui| {
                                 ui.label("Minute");
@@ -97,7 +97,7 @@ impl App {
                                 });
                             });
                         });
-                        ui.separator();
+                        //                         ui.separator();
                         // am or pm
                         ui.horizontal(|ui| {
                             ui.add_space(15.0);
@@ -114,12 +114,12 @@ impl App {
                         });
                     });
 
-                    ui.add(Separator::default().vertical());
+                    //                     ui.add(Separator::default().vertical());
                     ui.vertical(|ui| {
                         ui.scope(|ui| {
                             // set size of alarm selector so it doesnt make alarm creation to big when using cutom alarm
                             if matches!(self.alarm_sound, AlarmSound::Custom(..)) {
-                                ui.set_max_size(vec2(75.0, 80.0));
+                                // ui.set_max_size(vec2(75.0, 80.0));
                             }
 
                             // pick an alarm sound
@@ -152,23 +152,23 @@ impl App {
                                 );
                             });
                         });
-                        // set custom alarm sound stuff
-                        if let AlarmSound::Custom(path, name) = &mut self.alarm_sound {
-                            ui.text_edit_singleline(name);
-                            ui.horizontal(|ui| {
-                                if ui.button("file").clicked() {
-                                    // TODO: validate is a sound file
-                                    if let Some(path_name) = rfd::FileDialog::new().pick_file() {
-                                        *path = path_name;
-                                    }
-                                }
-                                ui.label(path.to_string_lossy());
-                            });
-                        }
                     });
-                });
 
-                ui.separator();
+                });
+                    // set custom alarm sound stuff
+                    if let AlarmSound::Custom(path, name) = &mut self.alarm_sound {
+                        ui.text_edit_singleline(name);
+                        ui.horizontal(|ui| {
+                            if ui.button("file").clicked() {
+                                // TODO: validate is a sound file
+                                if let Some(path_name) = rfd::FileDialog::new().pick_file() {
+                                    *path = path_name;
+                                }
+                            }
+                            ui.label(path.to_string_lossy());
+                        });
+                    }
+                //                 ui.separator();
                 ui.horizontal(|ui| {
                     if ui.button("done").clicked() {
                         self.alarms.push(Alarm {
