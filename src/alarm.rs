@@ -10,18 +10,34 @@ pub(crate) struct Alarm {
     pub(crate) sound: AlarmSound,
     pub(crate) snooze_time: (),
     pub(crate) enabled_days: (),
+    pub(crate) enabled: bool,
     // time_of_day: TimeOfDay,
     // possibly volume
 }
 
 impl Alarm {
     // TODO: create a new method
-    pub(crate) fn render_alarm(&self, time_format: &str, ui: &mut eframe::egui::Ui) {
-        if let Some(name) = &self.name {
-            ui.label(name);
-        }
-        ui.label(self.time.format(&time_format).to_string());
-        ui.label(format!("alarm sound: {}", self.sound));
+    pub(crate) fn render_alarm(&mut self, time_format: &str, ui: &mut eframe::egui::Ui) {
+        ui.scope(|ui| {
+            // gray out color if alarm is disabled
+            if !self.enabled {
+                let faded = ui.visuals().fade_out_to_color();
+               ui.visuals_mut().panel_fill = faded;
+            }
+
+            ui.horizontal(|ui| {
+                // name
+                if let Some(name) = &self.name {
+                    ui.label(name);
+                } else {
+                    ui.label("unnamed alarm");
+                }
+                // on off button
+                ui.checkbox(&mut self.enabled, "enabled");
+            });
+            ui.label(self.time.format(&time_format).to_string());
+            ui.label(format!("alarm sound: {}", self.sound));
+        });
     }
 }
 

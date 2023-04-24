@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use alarm::{Alarm, AlarmSound};
 use eframe::{
-    egui::{self, CentralPanel, Layout, ScrollArea, Separator, TopBottomPanel, Visuals, Window},
+    egui::{self, CentralPanel, Layout, ScrollArea, Separator, TopBottomPanel, Visuals, Window, Grid},
     epaint::vec2,
 };
 mod alarm;
@@ -54,121 +54,33 @@ impl App {
 
     // TODO: remove staticly set vec2s
     fn render_alarm_creation(&mut self, ctx: &egui::Context) {
-        Window::new("adding alarm") 
-            .fixed_size(vec2(170.0, 30.0))
+        Window::new("adding alarm")
+            // .fixed_size(vec2(190.0, 80.0))
+            
+            .resize(|resize| {
+                resize.resizable(false).max_size(vec2(190.0, 50.0))
+            })
             .show(ctx, |ui| {
                 let mut text_input_name = String::new();
                 ui.horizontal(|ui| {
                     ui.label("name: ");
                     ui.text_edit_singleline(&mut text_input_name);
                 });
-                //                 ui.separator();
+
+                // ui.separator();
+                // ui.add(Separator::default().spacing(10f32));
+
+                // rights side of time selector alarm seletor over custom alarm editor
+                // time editor
                 ui.horizontal(|ui| {
-                    // time selector
-                    ui.vertical(|ui| {
-                        // ui.set_max_size(vec2(95.0, 115.0));
-                        ui.horizontal(|ui| {
-                            // hour selector
-                            ui.vertical(|ui| {
-                                ui.label("Hour");
-                                ScrollArea::vertical().id_source("hours").show(ui, |ui| {
-                                    (1..=12).for_each(|i| {
-                                        ui.selectable_value(
-                                            &mut self.alarm_time_input_hour,
-                                            if i != 12 { i } else { 0 },
-                                            i.to_string(),
-                                        );
-                                    });
-                                });
-                            });
-
-                            //                             ui.add(Separator::default().vertical());
-                            // minute selector
-                            ui.vertical(|ui| {
-                                ui.label("Minute");
-                                ScrollArea::vertical().id_source("minutes").show(ui, |ui| {
-                                    (0..=59).for_each(|i| {
-                                        ui.selectable_value(
-                                            &mut self.alarm_time_input_mins,
-                                            i,
-                                            i.to_string(),
-                                        );
-                                    });
-                                });
-                            });
-                        });
-                        //                         ui.separator();
-                        // am or pm
-                        ui.horizontal(|ui| {
-                            ui.add_space(15.0);
-                            ui.selectable_value(
-                                &mut self.alarm_time_time_of_day,
-                                TimeOfDay::AM,
-                                "AM",
-                            );
-                            ui.selectable_value(
-                                &mut self.alarm_time_time_of_day,
-                                TimeOfDay::PM,
-                                "PM",
-                            );
-                        });
-                    });
-
-                    //                     ui.add(Separator::default().vertical());
-                    ui.vertical(|ui| {
-                        ui.scope(|ui| {
-                            // set size of alarm selector so it doesnt make alarm creation to big when using cutom alarm
-                            if matches!(self.alarm_sound, AlarmSound::Custom(..)) {
-                                // ui.set_max_size(vec2(75.0, 80.0));
-                            }
-
-                            // pick an alarm sound
-                            // TODO: make something that automates this
-                            ScrollArea::vertical().id_source("alarm").show(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.alarm_sound,
-                                    AlarmSound::Ring,
-                                    "Ring",
-                                );
-                                ui.selectable_value(
-                                    &mut self.alarm_sound,
-                                    AlarmSound::BingBong,
-                                    "BingBong",
-                                );
-                                ui.selectable_value(
-                                    &mut self.alarm_sound,
-                                    AlarmSound::TickTock,
-                                    "TickTock",
-                                );
-                                ui.selectable_value(
-                                    &mut self.alarm_sound,
-                                    AlarmSound::Rain,
-                                    "Rain",
-                                );
-                                ui.selectable_value(
-                                    &mut self.alarm_sound,
-                                    AlarmSound::Custom(PathBuf::new(), String::new()),
-                                    "custom",
-                                );
-                            });
-                        });
-                    });
-
+                    self.render_time_editor(ui);
+                    // sound editor
+                    // ui.separator();
+                    self.render_sound_editor(ui);
                 });
-                    // set custom alarm sound stuff
-                    if let AlarmSound::Custom(path, name) = &mut self.alarm_sound {
-                        ui.text_edit_singleline(name);
-                        ui.horizontal(|ui| {
-                            if ui.button("file").clicked() {
-                                // TODO: validate is a sound file
-                                if let Some(path_name) = rfd::FileDialog::new().pick_file() {
-                                    *path = path_name;
-                                }
-                            }
-                            ui.label(path.to_string_lossy());
-                        });
-                    }
-                //                 ui.separator();
+
+                // set custom alarm sound stuff
+                // ui.separator();
                 ui.horizontal(|ui| {
                     if ui.button("done").clicked() {
                         self.alarms.push(Alarm {
@@ -186,6 +98,7 @@ impl App {
                             sound: self.alarm_sound.clone(),
                             snooze_time: (),
                             enabled_days: (),
+                            enabled: true,
                         });
                         self.adding_alarm = false;
                     }
@@ -194,6 +107,100 @@ impl App {
                     }
                 });
             });
+    }
+
+    fn render_sound_editor(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            // alarm sound
+            self.render_alarm_sound_selector(ui);
+            // set custom alarm sound stuff
+            self.render_custom_alarm_sound_editor(ui);
+        });
+    }
+
+    fn render_time_editor(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                // hour selector
+                self.render_hour_selector(ui);
+                // ui.add(Separator::default().spacing(10f32));
+                // minute selector
+                self.render_minute_selector(ui);
+            });
+            // ui.add(Separator::default().spacing(10f32));
+            // am or pm
+            self.render_am_pm_selector(ui);
+        });
+    }
+
+    fn render_custom_alarm_sound_editor(&mut self, ui: &mut egui::Ui) {
+        if let AlarmSound::Custom(path, name) = &mut self.alarm_sound {
+            ui.horizontal(|ui| {
+                ui.text_edit_singleline(name);
+                if ui.button("file").clicked() {
+                    // TODO: validate is a sound file
+                    if let Some(path_name) = rfd::FileDialog::new().pick_file() {
+                        *path = path_name;
+                    }
+                }
+            });
+        }
+    }
+
+    fn render_alarm_sound_selector(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            // set size of alarm selector so it doesnt make alarm creation to big when using cutom alarm
+            // pick an alarm sound
+            // TODO: make something that automates this
+            ScrollArea::vertical().id_source("alarm").show(ui, |ui| {
+                ui.selectable_value(&mut self.alarm_sound, AlarmSound::Ring, "Ring");
+                ui.selectable_value(&mut self.alarm_sound, AlarmSound::BingBong, "BingBong");
+                ui.selectable_value(&mut self.alarm_sound, AlarmSound::TickTock, "TickTock");
+                ui.selectable_value(&mut self.alarm_sound, AlarmSound::Rain, "Rain");
+                ui.selectable_value(&mut self.alarm_sound, AlarmSound::Rain, "Rain");
+                ui.selectable_value(&mut self.alarm_sound, AlarmSound::Rain, "Rain");
+                ui.selectable_value(&mut self.alarm_sound, AlarmSound::Rain, "Rain");
+                ui.selectable_value(
+                    &mut self.alarm_sound,
+                    AlarmSound::Custom(PathBuf::new(), String::new()),
+                    "custom",
+                );
+            });
+        });
+    }
+
+    fn render_am_pm_selector(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.add_space(15.0);
+            ui.selectable_value(&mut self.alarm_time_time_of_day, TimeOfDay::AM, "AM");
+            ui.selectable_value(&mut self.alarm_time_time_of_day, TimeOfDay::PM, "PM");
+        });
+    }
+
+    fn render_minute_selector(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            ui.label("Minute");
+            ScrollArea::vertical().id_source("minutes").show(ui, |ui| {
+                (0..=59).for_each(|i| {
+                    ui.selectable_value(&mut self.alarm_time_input_mins, i, i.to_string());
+                });
+            });
+        });
+    }
+
+    fn render_hour_selector(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            ui.label("Hour");
+            ScrollArea::vertical().id_source("hours").show(ui, |ui| {
+                (1..=12).for_each(|i| {
+                    ui.selectable_value(
+                        &mut self.alarm_time_input_hour,
+                        if i != 12 { i } else { 0 },
+                        i.to_string(),
+                    );
+                });
+            });
+        });
     }
 
     fn render_settings(&mut self, ctx: &egui::Context) {
@@ -228,6 +235,10 @@ impl App {
 impl eframe::App for App {
     // TODO: extract into different functions
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // an alarm need to keep state of its been rang today
+        self.alarms.iter().filter(|alarm| alarm.enabled && alarm.time >= chrono::Local::now().time()).for_each(|alarm| {
+            print!("\u{07}")
+        });
         ctx.request_repaint();
         if self.dark_theme {
             ctx.set_visuals(Visuals::dark());
@@ -249,10 +260,18 @@ impl eframe::App for App {
             if ui.button("+").clicked() {
                 self.adding_alarm = true;
             }
-            // TOPO use grid allignment
-            for alarm in &self.alarms {
-                alarm.render_alarm(&self.time_format, ui)
-            }
+            // scrollable grid - dynamic each cell is an alarm that get rendered with Alarm::render_alarm
+            ScrollArea::vertical().show(ui, |ui| {
+            Grid::new("alarms").show(ui, |ui| {
+                self.alarms.iter_mut().for_each(|alarm| {
+                    alarm.render_alarm(&self.time_format, ui);
+                });
+                //  check if were at end of a row
+                if ui.available_size_before_wrap().x < ui.available_size().x {
+                    ui.end_row();
+                }
+            });
+        });
         });
     }
 }
