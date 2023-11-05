@@ -4,6 +4,8 @@ use chrono::NaiveTime;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 
+use crate::{alarm_edit::EditingState, AlarmBuilder};
+
 #[derive(Debug, Serialize, Deserialize, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Theme {
     #[default]
@@ -51,35 +53,11 @@ impl Default for Config {
             // TickTock,
             // Rain,
             sounds: vec![
-                (
-                    "ring".to_string(),
-                    Sound::new("ring".to_string(), Self::sounds_path().join("ring.mp3")),
-                ),
-                (
-                    "bing bong".to_string(),
-                    Sound::new(
-                        "bing bong".to_string(),
-                        Self::sounds_path().join("bing_bong.mp3"),
-                    ),
-                ),
-                (
-                    "tick tock".to_string(),
-                    Sound::new(
-                        "tick tock".to_string(),
-                        Self::sounds_path().join("tick_tock.mp3"),
-                    ),
-                ),
-                (
-                    "beep beep".to_string(),
-                    Sound::new(
-                        "beep beep".to_string(),
-                        Self::sounds_path().join("beep_beep.mp3"),
-                    ),
-                ),
-                (
-                    "rain".to_string(),
-                    Sound::new("rain".to_string(), Self::sounds_path().join("rain.mp3")),
-                ),
+                ("ring".to_string(), Sound::ring()),
+                ("bing bong".to_string(), Sound::bing_bong()),
+                ("tick tock".to_string(), Sound::tick_tock()),
+                ("beep beep".to_string(), Sound::beep_beep()),
+                ("rain".to_string(), Sound::rain()),
             ]
             .into_iter()
             .collect(),
@@ -147,10 +125,17 @@ pub struct Alarm {
     pub sound: String,
     #[serde(default = "always_true")]
     pub enabled: bool,
+    #[serde(skip)]
+    pub editing: Option<AlarmBuilder>,
 }
 
 impl Alarm {
-    pub(crate) fn render_alarm(&mut self, time_format: &str, ui: &mut eframe::egui::Ui) {
+    pub(crate) fn render_alarm(
+        &mut self,
+        time_format: &str,
+        ui: &mut eframe::egui::Ui,
+        ctx: &eframe::egui::Context,
+    ) {
         ui.scope(|ui| {
             // gray out color if alarm is disabled
             if !self.enabled {
@@ -166,7 +151,33 @@ impl Alarm {
             });
             ui.label(self.time.format(time_format).to_string());
             ui.label(format!("alarm sound: {}", self.sound));
-            // self.edit_alarm(ui);
+            ui.add(
+                egui::Slider::new(&mut self.volume, 0.0..=100.0)
+                    .integer()
+                    .suffix("%")
+                    .text("volume"),
+            );
+
+            if let Some(editing) = &mut self.editing {
+                // TODO: passing the actual sounds
+                match editing.render_alarm_editor(ctx, &mut HashMap::new()) {
+                    EditingState::Done(new_alarm) => {
+                        self.editing = None;
+                        *self = new_alarm;
+                    }
+                    EditingState::Cancelled => {
+                        self.editing = None;
+                    }
+                    _ => {}
+                }
+            }
+            ui.horizontal(|ui| {
+                if ui.button("edit").clicked() {
+                    // TODO: make alarm builder use the current state of the alarm instead of the default one
+                    // so if alarm is set for 5:00 PM and you click edit it will show 5:00 PM instead of 12:00 AM
+                    self.editing = Some(AlarmBuilder::default());
+                }
+            });
         });
     }
 }
@@ -201,7 +212,7 @@ impl Sound {
     }
 
     #[must_use]
-    pub fn new(name: String, path: PathBuf) -> Self {
+    pub const fn new(name: String, path: PathBuf) -> Self {
         Self { name, path }
     }
 

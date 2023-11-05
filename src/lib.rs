@@ -2,8 +2,11 @@
 #![deny(clippy::use_self, rust_2018_idioms)]
 #![allow(clippy::multiple_crate_versions, clippy::module_name_repetitions)]
 
+use alarm_edit::EditingState;
 use config::{Config, Sound, Theme};
-use eframe::egui::{self, Button, CentralPanel, Grid, Layout, ScrollArea, TopBottomPanel, Window};
+use eframe::egui::{
+    self, Button, CentralPanel, Context, Grid, Layout, ScrollArea, TopBottomPanel, Window,
+};
 
 pub mod config;
 
@@ -22,6 +25,7 @@ pub struct Clock {
     adding_alarm: Option<AlarmBuilder>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct AlarmBuilder {
     name: String,
     hour: u8,
@@ -62,25 +66,6 @@ impl Clock {
         });
     }
 
-    fn render_alarm_creation(&mut self, ctx: &egui::Context) {
-        Window::new("adding alarm").show(ctx, |ui| {
-            self.adding_alarm
-                .as_mut()
-                .unwrap()
-                .edit_alarm(ui, &mut self.config.sounds);
-            ui.horizontal(|ui| {
-                if ui.button("done").clicked() {
-                    self.config
-                        .alarms
-                        .push(std::mem::take(&mut self.adding_alarm).unwrap().build());
-                }
-                if ui.button("cancel").clicked() {
-                    self.adding_alarm = None;
-                }
-            });
-        });
-    }
-
     fn render_header(&mut self, ctx: &egui::Context) {
         TopBottomPanel::top("time_and_ctrl").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -112,14 +97,14 @@ impl Clock {
         });
     }
 
-    fn list_alarms(&mut self, ui: &mut egui::Ui, skip: usize) {
+    fn list_alarms(&mut self, ui: &mut egui::Ui, skip: usize, ctx: &Context) {
         for (i, alarm) in self.config.alarms.iter_mut().enumerate().skip(skip) {
             if ui.button("x").on_hover_text("delete alarm").clicked() {
                 self.config.alarms.remove(i);
-                self.list_alarms(ui, i);
+                self.list_alarms(ui, i, ctx);
                 break;
             }
-            alarm.render_alarm(&self.config.time_format, ui);
+            alarm.render_alarm(&self.config.time_format, ui, ctx);
             ui.end_row();
         }
     }
@@ -136,8 +121,17 @@ impl eframe::App for Clock {
             self.render_settings(ctx);
         }
         // alarm creation
-        if self.adding_alarm.is_some() {
-            self.render_alarm_creation(ctx);
+        if let Some(editing) = &mut self.adding_alarm {
+            match editing.render_alarm_editor(ctx, &mut self.config.sounds) {
+                EditingState::Done(new_alarm) => {
+                    self.adding_alarm = None;
+                    self.config.alarms.push(new_alarm);
+                }
+                EditingState::Cancelled => {
+                    self.adding_alarm = None;
+                }
+                _ => {}
+            }
         }
         // header
         self.render_header(ctx);
@@ -149,7 +143,7 @@ impl eframe::App for Clock {
 
             ScrollArea::vertical().show(ui, |ui| {
                 Grid::new("alarms").show(ui, |ui| {
-                    self.list_alarms(ui, 0);
+                    self.list_alarms(ui, 0, ctx);
                 });
             });
         });

@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use chrono::NaiveTime;
-use eframe::egui::{self, ScrollArea};
+use eframe::egui::{self, ScrollArea, Window};
 
 use crate::{
-    config::{self, Sound},
+    config::{self, Alarm, Sound},
     AlarmBuilder, TimeOfDay,
 };
 
@@ -30,6 +30,7 @@ impl AlarmBuilder {
             sound: self.sound,
             volume: self.volume,
             enabled: true,
+            editing: None,
         }
     }
 
@@ -133,6 +134,7 @@ impl AlarmBuilder {
             // set custom alarm sound stuff
             self.render_custom_alarm_sound_editor(ui);
         });
+        self.render_volume_slider(ui);
     }
 
     pub(crate) fn render_custom_alarm_sound_editor(&mut self, _ui: &mut egui::Ui) {
@@ -159,22 +161,49 @@ impl AlarmBuilder {
             // pick an alarm sound
             // TODO: make something that automates this
             ScrollArea::vertical().id_source("alarm").show(ui, |ui| {
-                // ui.selectable_value(&mut self.sound, AlarmSound::Ring, "Ring");
-                // ui.selectable_value(&mut self.sound, AlarmSound::BingBong, "BingBong");
-                // ui.selectable_value(&mut self.sound, AlarmSound::TickTock, "TickTock");
-                // ui.selectable_value(&mut self.sound, AlarmSound::Rain, "Rain");
-                // ui.selectable_value(&mut self.sound, AlarmSound::Rain, "Rain");
-                // ui.selectable_value(&mut self.sound, AlarmSound::Rain, "Rain");
-                // ui.selectable_value(&mut self.sound, AlarmSound::Rain, "Rain");
-                // ui.selectable_value(
-                //     &mut self.sound,
-                //     AlarmSound::Custom(PathBuf::new(), String::new()),
-                //     "custom",
-                // );
-                for (name, _) in &mut *sounds {
+                for name in sounds.keys() {
                     ui.selectable_value(&mut self.sound, name.to_string(), name);
                 }
             });
         });
     }
+
+    pub fn render_volume_slider(&mut self, ui: &mut egui::Ui) {
+        ui.add(
+            egui::Slider::new(&mut self.volume, 100.0..=00.0)
+                .vertical()
+                .integer()
+                .suffix("%")
+                .text("volume"),
+        );
+    }
+
+    pub fn render_alarm_editor(
+        &mut self,
+        ctx: &egui::Context,
+        sounds: &mut HashMap<String, Sound>,
+    ) -> EditingState {
+        let mut ret = EditingState::Editing;
+        // if no alarm name set we need way to differentiate between different alarms
+        Window::new(format!("editing alarm {}", self.name)).show(ctx, |ui| {
+            self.edit_alarm(ui, sounds);
+            ui.horizontal(|ui| {
+                if ui.button("done").clicked() {
+                    ret = EditingState::Done(self.clone().build());
+                } else if ui.button("cancel").clicked() {
+                    ret = EditingState::Cancelled;
+                } else {
+                    ret = EditingState::Editing;
+                }
+            });
+        });
+        ret
+    }
+}
+
+pub enum EditingState {
+    Cancelled,
+    Editing,
+    Done(Alarm),
+    Nothing,
 }
