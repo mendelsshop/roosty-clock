@@ -44,17 +44,6 @@ impl AlarmBuilder {
         });
     }
 
-    pub(crate) fn set_hour(&mut self, hour: u8) {
-        self.hour = hour;
-    }
-
-    pub(crate) fn set_minute(&mut self, minute: u8) {
-        self.minute = minute;
-    }
-
-    pub(crate) fn set_ampm(&mut self, ampm: TimeOfDay) {
-        self.time_of_day = ampm;
-    }
     pub(crate) fn render_time_editor(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
@@ -72,18 +61,8 @@ impl AlarmBuilder {
     pub(crate) fn render_am_pm_selector(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.add_space(15.0);
-            if ui
-                .selectable_value(&mut self.time_of_day, TimeOfDay::AM, "AM")
-                .clicked()
-            {
-                self.set_ampm(TimeOfDay::AM);
-            }
-            if ui
-                .selectable_value(&mut self.time_of_day, TimeOfDay::PM, "PM")
-                .clicked()
-            {
-                self.set_ampm(TimeOfDay::PM);
-            }
+            ui.selectable_value(&mut self.time_of_day, TimeOfDay::AM, "AM");
+            ui.selectable_value(&mut self.time_of_day, TimeOfDay::PM, "PM");
         });
     }
 
@@ -92,12 +71,7 @@ impl AlarmBuilder {
             ui.label("Minute");
             ScrollArea::vertical().id_source("minutes").show(ui, |ui| {
                 (0..=59).for_each(|i| {
-                    if ui
-                        .selectable_value(&mut self.minute, i, i.to_string())
-                        .clicked()
-                    {
-                        self.set_minute(i);
-                    }
+                    ui.selectable_value(&mut self.minute, i, i.to_string());
                 });
             });
         });
@@ -108,16 +82,7 @@ impl AlarmBuilder {
             ui.label("Hour");
             ScrollArea::vertical().id_source("hours").show(ui, |ui| {
                 (1..=12).for_each(|i| {
-                    if ui
-                        .selectable_value(
-                            &mut self.hour,
-                            if i == 12 { 0 } else { i },
-                            i.to_string(),
-                        )
-                        .clicked()
-                    {
-                        self.set_hour(if i == 12 { 0 } else { i });
-                    }
+                    ui.selectable_value(&mut self.hour, if i == 12 { 0 } else { i }, i.to_string());
                 });
             });
         });
@@ -205,5 +170,4 @@ pub enum EditingState {
     Cancelled,
     Editing,
     Done(Alarm),
-    Nothing,
 }

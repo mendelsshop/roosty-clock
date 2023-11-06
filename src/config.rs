@@ -1,10 +1,10 @@
 use std::{collections::HashMap, fmt, ops::Not, path::PathBuf};
 
-use chrono::NaiveTime;
+use chrono::{NaiveTime, Timelike};
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 
-use crate::{alarm_edit::EditingState, AlarmBuilder};
+use crate::{alarm_edit::EditingState, AlarmBuilder, TimeOfDay};
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Theme {
@@ -115,7 +115,7 @@ pub const fn always_true() -> bool {
     true
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Alarm {
     pub name: Option<String>,
     #[serde(with = "toml_datetime_compat")]
@@ -127,6 +127,20 @@ pub struct Alarm {
     pub enabled: bool,
     #[serde(skip)]
     pub editing: Option<AlarmBuilder>,
+}
+
+impl From<Alarm> for AlarmBuilder {
+    fn from(alarm: Alarm) -> Self {
+        let (ampm, hour) = alarm.time.hour12();
+        Self {
+            name: alarm.name.unwrap_or_default(),
+            hour: if hour == 12 { 0 } else { hour } as u8,
+            minute: alarm.time.minute() as u8,
+            time_of_day: if ampm { TimeOfDay::PM } else { TimeOfDay::AM },
+            sound: alarm.sound,
+            volume: alarm.volume,
+        }
+    }
 }
 
 impl Alarm {
@@ -175,7 +189,7 @@ impl Alarm {
                 if ui.button("edit").clicked() {
                     // TODO: make alarm builder use the current state of the alarm instead of the default one
                     // so if alarm is set for 5:00 PM and you click edit it will show 5:00 PM instead of 12:00 AM
-                    self.editing = Some(AlarmBuilder::default());
+                    self.editing = Some(AlarmBuilder::from(self.clone()));
                 }
             });
         });

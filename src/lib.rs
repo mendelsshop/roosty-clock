@@ -3,6 +3,7 @@
 #![allow(clippy::multiple_crate_versions, clippy::module_name_repetitions)]
 
 use alarm_edit::EditingState;
+use chrono::Timelike;
 use config::{Config, Sound, Theme};
 use eframe::egui::{
     self, Button, CentralPanel, Context, Grid, Layout, ScrollArea, TopBottomPanel, Window,
@@ -37,11 +38,13 @@ pub struct AlarmBuilder {
 
 impl Default for AlarmBuilder {
     fn default() -> Self {
+        let time = chrono::Local::now().naive_local().time();
+        let (ampm, hour) = time.hour12();
         Self {
             name: String::default(),
-            hour: 0,
-            minute: 0,
-            time_of_day: TimeOfDay::AM,
+            hour: if hour == 12 { 0 } else { hour } as u8,
+            minute: time.minute() as u8,
+            time_of_day: if ampm { TimeOfDay::PM } else { TimeOfDay::AM },
             sound: Sound::get_default_name(),
             volume: 100.0,
         }
