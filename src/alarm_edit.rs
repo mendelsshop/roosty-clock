@@ -4,7 +4,7 @@ use chrono::NaiveTime;
 use eframe::egui::{self, ScrollArea, Window};
 
 use crate::{
-    config::{self, Alarm, Sound},
+    config::{self, get_uid, Alarm, Sound},
     AlarmBuilder, TimeOfDay,
 };
 
@@ -31,6 +31,8 @@ impl AlarmBuilder {
             volume: self.volume,
             enabled: true,
             editing: None,
+            rang_today: false,
+            id: get_uid(),
         }
     }
 

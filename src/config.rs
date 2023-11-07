@@ -1,4 +1,9 @@
-use std::{collections::HashMap, fmt, ops::Not, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fmt,
+    ops::{AddAssign, Not},
+    path::PathBuf,
+};
 
 use chrono::{NaiveTime, Timelike};
 use eframe::egui;
@@ -115,6 +120,16 @@ pub const fn always_true() -> bool {
     true
 }
 
+static mut UID: usize = 0;
+
+pub fn get_uid() -> usize {
+    // SAFETY: this is only called when we are creating a new alarm which only happens in the main thread
+    unsafe {
+        UID += 1;
+        UID
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Alarm {
     pub name: Option<String>,
@@ -127,6 +142,10 @@ pub struct Alarm {
     pub enabled: bool,
     #[serde(skip)]
     pub editing: Option<AlarmBuilder>,
+    #[serde(skip)]
+    pub rang_today: bool,
+    #[serde(skip, default = "get_uid")]
+    pub id: usize,
 }
 
 impl From<Alarm> for AlarmBuilder {
@@ -143,13 +162,27 @@ impl From<Alarm> for AlarmBuilder {
     }
 }
 
+impl AddAssign for Alarm {
+    /// used so that when we edit an alarm we don't lose its id
+    /// also so to reset the rang_today field
+    fn add_assign(&mut self, rhs: Self) {
+        self.time = rhs.time;
+        self.volume = rhs.volume;
+        self.sound = rhs.sound;
+        self.enabled = rhs.enabled;
+        self.name = rhs.name;
+    }
+}
+
 impl Alarm {
+    // returns true if we edited the alarm
     pub(crate) fn render_alarm(
         &mut self,
         time_format: &str,
         ui: &mut eframe::egui::Ui,
         ctx: &eframe::egui::Context,
-    ) {
+    ) -> bool {
+        let mut ret = false;
         ui.scope(|ui| {
             // gray out color if alarm is disabled
             if !self.enabled {
@@ -177,7 +210,8 @@ impl Alarm {
                 match editing.render_alarm_editor(ctx, &mut HashMap::new()) {
                     EditingState::Done(new_alarm) => {
                         self.editing = None;
-                        *self = new_alarm;
+                        ret = true;
+                        *self += new_alarm;
                     }
                     EditingState::Cancelled => {
                         self.editing = None;
@@ -187,12 +221,23 @@ impl Alarm {
             }
             ui.horizontal(|ui| {
                 if ui.button("edit").clicked() {
-                    // TODO: make alarm builder use the current state of the alarm instead of the default one
-                    // so if alarm is set for 5:00 PM and you click edit it will show 5:00 PM instead of 12:00 AM
+                    // if alarm is set for 5:00 PM and you click edit it will show 5:00 PM instead of 12:00 AM
+                    // by using current alarm config
                     self.editing = Some(AlarmBuilder::from(self.clone()));
                 }
             });
         });
+        ret
+    }
+
+    pub fn send_stop(&mut self, sender: &std::sync::mpsc::Sender<crate::communication::Message>) {
+        sender
+            .send(crate::communication::Message::new(
+                crate::communication::MessageType::AlarmStopped,
+                self.id,
+            ))
+            .unwrap();
+        self.rang_today = false;
     }
 }
 

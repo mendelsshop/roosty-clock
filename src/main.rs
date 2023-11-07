@@ -1,8 +1,12 @@
-use std::{error::Error, path::PathBuf};
+use std::{collections::HashMap, error::Error, path::PathBuf, thread};
 
 use clap::{command, Parser, Subcommand};
 use eframe::run_native;
-use roosty_clock::{config::Config, Clock};
+use roosty_clock::{
+    communication::{Message, MessageType},
+    config::Config,
+    Clock,
+};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -52,13 +56,38 @@ fn main() -> Result<(), Box<dyn Error>> {
         None => {}
     }
 
+    let (tx, rx) = std::sync::mpsc::channel();
+    thread::spawn(move || {
+        let mut alarm_map = HashMap::new();
+        loop {
+            match rx.recv_timeout(std::time::Duration::from_millis(10)) {
+                Ok(Message {
+                    kind: MessageType::AlarmTriggered { volume, sound_path },
+                    alarm_id,
+                }) => {
+                    println!("alarm {alarm_id} triggered with volume {volume}");
+                    alarm_map.insert(alarm_id, (volume, sound_path));
+                }
+                Ok(Message {
+                    kind: MessageType::AlarmStopped,
+                    alarm_id,
+                }) => {
+                    if alarm_map.remove(&alarm_id).is_some() {
+                        println!("alarm {alarm_id} stopped");
+                    }
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                Err(_) => {}
+            }
+        }
+    });
     // TODO: make config file
     // TODO: check if user has changed time format in config
     // run the gui
     run_native(
         "Roosty Clock",
         native_options,
-        Box::new(|_| Box::new(Clock::new())),
+        Box::new(|_| Box::new(Clock::new(tx))),
     )
     .map_err(|e| e.into())
 }

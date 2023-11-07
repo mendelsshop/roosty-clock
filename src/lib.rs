@@ -6,13 +6,14 @@ use alarm_edit::EditingState;
 use chrono::Timelike;
 use config::{Config, Sound, Theme};
 use eframe::egui::{
-    self, Button, CentralPanel, Context, Grid, Layout, ScrollArea, TopBottomPanel, Window,
+    self,Button, CentralPanel, Context, Grid, Layout, ScrollArea, TopBottomPanel, Window,
 };
 
 pub mod config;
 
 /// implementation of alarm editing for egui
 pub mod alarm_edit;
+pub mod communication;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TimeOfDay {
@@ -22,6 +23,7 @@ pub enum TimeOfDay {
 }
 pub struct Clock {
     config: Config,
+    sender: std::sync::mpsc::Sender<communication::Message>,
     in_config: bool,
     adding_alarm: Option<AlarmBuilder>,
 }
@@ -53,11 +55,12 @@ impl Default for AlarmBuilder {
 
 impl Clock {
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(sender: std::sync::mpsc::Sender<communication::Message>) -> Self {
         Self {
             config: Config::load(Config::config_path()),
             in_config: false,
             adding_alarm: None,
+            sender,
         }
     }
 
@@ -103,19 +106,60 @@ impl Clock {
     fn list_alarms(&mut self, ui: &mut egui::Ui, skip: usize, ctx: &Context) {
         for (i, alarm) in self.config.alarms.iter_mut().enumerate().skip(skip) {
             if ui.button("x").on_hover_text("delete alarm").clicked() {
+                // handle if alarm is currently active
+                if alarm.rang_today {
+                    alarm.send_stop(&self.sender);
+                }
                 self.config.alarms.remove(i);
+                // write changes to disk
+                self.config.save(Config::config_path());
                 self.list_alarms(ui, i, ctx);
                 break;
             }
-            alarm.render_alarm(&self.config.time_format, ui, ctx);
+            if alarm.enabled && !alarm.rang_today {
+                let num_seconds = chrono::Local::now()
+                    .naive_local()
+                    .time()
+                    .signed_duration_since(alarm.time)
+                    .num_seconds();
+                // should ring alarm if within minute of alarm time
+                if num_seconds < 60 && num_seconds >= 0 {
+                    self.sender
+                        .send(communication::Message::new(
+                            communication::MessageType::AlarmTriggered {
+                                volume: alarm.volume,
+                                sound_path: self.config.sounds[&alarm.sound].path.clone(),
+                            },
+                            alarm.id,
+                        ))
+                        .unwrap();
+                    alarm.rang_today = true;
+                }
+            } else if alarm.rang_today && !alarm.enabled {
+                alarm.send_stop(&self.sender);
+            }
+            let alarm_changed = alarm.render_alarm(&self.config.time_format, ui, ctx);
+            if alarm_changed {
+                // even if alarm.enabled is false or alarm.rang_today is false
+                // it may have been rang today or enabled but the user changed the alarm
+                alarm.send_stop(&self.sender);
+                // self.config.save(Config::config_path());
+            }
             ui.end_row();
         }
+    }
+
+    fn save(&self) {
+        self.config.save(Config::config_path());
     }
 }
 
 impl eframe::App for Clock {
     // TODO: extract into different functions
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // always update so time keeping/alarm triggers are accurate
+        // maybe we need another thread to do this instead of via the gui and use message passing to update the alarms instead
+        ctx.request_repaint();
         // an alarm need to keep state of its been rang today
 
         ctx.set_visuals(self.config.theme.into());
@@ -129,6 +173,7 @@ impl eframe::App for Clock {
                 EditingState::Done(new_alarm) => {
                     self.adding_alarm = None;
                     self.config.alarms.push(new_alarm);
+                    self.config.save(Config::config_path());
                 }
                 EditingState::Cancelled => {
                     self.adding_alarm = None;
