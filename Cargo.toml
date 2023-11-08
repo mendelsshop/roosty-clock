@@ -23,7 +23,8 @@ log = "0.4.17"
 # file selection dialogs
 rfd = "0.12.1"
 
-# TODO: sound crates
+# sound crates
+rodio = "0.17.3"
 
 # config crates
 directories = "5.0.1"

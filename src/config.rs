@@ -194,16 +194,23 @@ impl Alarm {
                 // name
                 ui.label(self.name.as_ref().unwrap_or(&"alarm".to_string()));
                 // on off button
-                ui.checkbox(&mut self.enabled, "enabled");
+                if ui.checkbox(&mut self.enabled, "enabled").clicked() {
+                    ret = true;
+                }
             });
             ui.label(self.time.format(time_format).to_string());
             ui.label(format!("alarm sound: {}", self.sound));
-            ui.add(
-                egui::Slider::new(&mut self.volume, 0.0..=100.0)
-                    .integer()
-                    .suffix("%")
-                    .text("volume"),
-            );
+            if ui
+                .add(
+                    egui::Slider::new(&mut self.volume, 0.0..=100.0)
+                        .integer()
+                        .suffix("%")
+                        .text("volume"),
+                )
+                .changed()
+            {
+                ret = true;
+            }
 
             if let Some(editing) = &mut self.editing {
                 // TODO: passing the actual sounds

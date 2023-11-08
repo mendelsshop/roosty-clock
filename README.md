@@ -23,3 +23,5 @@
 `roosty clock` is a simple alarm clock written in Rust.
 
 The `roosty` part of the name is a reference to rust as well as a rooster, which is a common alarm clock in the morning.
+
+<!-- https://github.com/RustAudio/rodio/issues/200 need to install system deps for audio to work -->

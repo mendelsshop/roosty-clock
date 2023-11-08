@@ -1,4 +1,6 @@
-use std::path::PathBuf;
+use std::{fs::File, io::BufReader};
+
+use eframe::egui::Context;
 
 pub struct Message {
     pub kind: MessageType,
@@ -12,9 +14,13 @@ impl Message {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum MessageType {
-    AlarmTriggered { volume: f32, sound_path: PathBuf },
+    AlarmTriggered {
+        volume: f32,
+        sound: BufReader<File>,
+        ctx: Context,
+    },
     // if the alarm is disabled/removed/time changed
     AlarmStopped,
 }

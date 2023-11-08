@@ -2,11 +2,13 @@
 #![deny(clippy::use_self, rust_2018_idioms)]
 #![allow(clippy::multiple_crate_versions, clippy::module_name_repetitions)]
 
+use std::io::BufReader;
+
 use alarm_edit::EditingState;
 use chrono::Timelike;
 use config::{Config, Sound, Theme};
 use eframe::egui::{
-    self,Button, CentralPanel, Context, Grid, Layout, ScrollArea, TopBottomPanel, Window,
+    self, Button, CentralPanel, Context, Grid, Layout, ScrollArea, TopBottomPanel, Window,
 };
 
 pub mod config;
@@ -124,11 +126,21 @@ impl Clock {
                     .num_seconds();
                 // should ring alarm if within minute of alarm time
                 if num_seconds < 60 && num_seconds >= 0 {
+                    let alarm_buffer = BufReader::new(
+                        std::fs::File::open(&self.config.sounds[&alarm.sound].path).expect(
+                            format!(
+                                "couldn't open sound file {}",
+                                &self.config.sounds[&alarm.sound].path.display()
+                            )
+                            .as_str(),
+                        ),
+                    );
                     self.sender
                         .send(communication::Message::new(
                             communication::MessageType::AlarmTriggered {
                                 volume: alarm.volume,
-                                sound_path: self.config.sounds[&alarm.sound].path.clone(),
+                                sound: alarm_buffer,
+                                ctx: ctx.clone(),
                             },
                             alarm.id,
                         ))
