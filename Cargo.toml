@@ -18,7 +18,7 @@ eframe = { version = "0.23.0" }
 chrono = "0.4.31"
 # logging crates
 simple_file_logger = "0.3.1"
-log = "0.4.17"
+log = "0.4.19"
 
 # file selection dialogs
 rfd = "0.12.1"
