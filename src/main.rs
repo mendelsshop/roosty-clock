@@ -1,6 +1,14 @@
+#![warn(clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![deny(
+    clippy::use_self,
+    rust_2018_idioms,
+    missing_debug_implementations,
+    clippy::missing_panics_doc
+)]
+
 use std::{collections::HashMap, error::Error, fs, io::Write, path::PathBuf, thread};
 
-use clap::{command, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use eframe::{egui::ViewportBuilder, run_native};
 use rodio::{decoder, Sink, Source};
 use roosty_clock::{
@@ -80,7 +88,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             match rx.recv_timeout(std::time::Duration::from_millis(10)) {
                 Ok(Message {
-                    kind: MessageType::AlarmTriggered { volume, sound, ctx },
+                    kind:
+                        MessageType::AlarmTriggered {
+                            volume,
+                            sound,
+                            ctx: _,
+                        },
                     alarm_id,
                 }) => {
                     println!("alarm {alarm_id} triggered with volume {volume}");
@@ -105,7 +118,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
                 Ok(Message {
                     kind: MessageType::UpdateCtx(new_ctx),
-                    alarm_id,
+                    alarm_id: _,
                 }) => {
                     // println!("updating context");
                     // if ctx.is_none() {
@@ -123,5 +136,5 @@ fn main() -> Result<(), Box<dyn Error>> {
         native_options,
         Box::new(|_| Ok(Box::new(Clock::new(tx)))),
     )
-    .map_err(|e| e.into())
+    .map_err(std::convert::Into::into)
 }

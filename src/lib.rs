@@ -114,7 +114,7 @@ impl Clock {
                 }
                 self.config.alarms.remove(i);
                 // write changes to disk
-                self.config.save(Config::config_path());
+                self.save();
                 self.list_alarms(ui, i, ctx);
                 break;
             }
@@ -177,14 +177,16 @@ impl Clock {
                 // even if alarm.enabled is false or alarm.rang_today is false
                 // it may have been rang today or enabled but the user changed the alarm
                 alarm.send_stop(&self.sender);
-                // self.config.save(Config::config_path());
+                self.save();
+                self.list_alarms(ui, i, ctx);
+                break;
             }
             ui.end_row();
         }
     }
 
     fn save(&self) {
-        self.config.clone().save(Config::config_path());
+        self.config.save(Config::config_path());
     }
 }
 
