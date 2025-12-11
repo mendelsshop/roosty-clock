@@ -1,10 +1,7 @@
 use std::{collections::HashMap, error::Error, fs, io::Write, path::PathBuf, thread};
 
 use clap::{command, Parser, Subcommand};
-use eframe::{
-    egui::{ViewportBuilder, Window},
-    run_native,
-};
+use eframe::{egui::ViewportBuilder, run_native};
 use rodio::{decoder, Sink, Source};
 use roosty_clock::{
     communication::{Message, MessageType},
@@ -77,21 +74,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut ctx = None;
         loop {
             for alarm in &alarm_map {
-                alarm.1 .1.set_volume(alarm.1 .0 / 100.0);
-                // passing this context around makes panic
-                // window to turn off the alarm
-                Window::new("Alarm Triggered")
-                    .auto_sized()
-                    .show(ctx.as_ref().unwrap(), |ui| {
-                        ui.label(format!(
-                            "alarm {} triggered with volume {}",
-                            alarm.0, alarm.1 .0
-                        ));
-                        if ui.button("stop").clicked() {
-                            alarm.1 .1.stop();
-                        }
-                    });
+                cpvc::set_mute(false);
+                cpvc::set_system_volume(alarm.1 .0 as u8);
             }
+
             match rx.recv_timeout(std::time::Duration::from_millis(10)) {
                 Ok(Message {
                     kind: MessageType::AlarmTriggered { volume, sound, ctx },
@@ -101,16 +87,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                     // create source that repeatedly plays the sound at the specified volume and play it
                     let input = decoder::Decoder::new(sound).unwrap().repeat_infinite();
                     let sink = Sink::connect_new(stream_handle.mixer());
-                    sink.set_volume(volume / 100.0);
+                    // sink.set_volume(volume / 100.0);
                     sink.append(input);
                     sink.play();
+                    cpvc::set_mute(false);
+                    // cpvc::set_system_volume(volume as u8);
                     alarm_map.insert(alarm_id, (volume, sink));
                 }
                 Ok(Message {
                     kind: MessageType::AlarmStopped,
                     alarm_id,
                 }) => {
-                    if let Some(alarm) = alarm_map.get(&alarm_id) {
+                    if let Some(alarm) = alarm_map.remove(&alarm_id) {
                         println!("alarm {alarm_id} stopped");
                         alarm.1.stop();
                     }

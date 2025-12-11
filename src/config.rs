@@ -38,7 +38,7 @@ impl From<Theme> for egui::Visuals {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     pub(crate) time_format: String,
     #[serde(default)]
@@ -144,6 +144,8 @@ pub struct Alarm {
     pub editing: Option<AlarmBuilder>,
     #[serde(skip)]
     pub rang_today: bool,
+    #[serde(skip)]
+    pub ringing: bool,
     #[serde(skip, default = "get_uid")]
     pub id: usize,
 }

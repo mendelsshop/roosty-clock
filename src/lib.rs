@@ -147,12 +147,33 @@ impl Clock {
                         ))
                         .unwrap();
                     alarm.rang_today = true;
+                    alarm.ringing = true;
                 }
             } else if alarm.rang_today && !alarm.enabled {
+                alarm.ringing = true;
                 alarm.send_stop(&self.sender);
+            }
+            if alarm.ringing {
+                Window::new("Alarm Triggered").auto_sized().show(ctx, |ui| {
+                    ui.label(format!(
+                        "alarm {} triggered with volume {}",
+                        alarm.id, alarm.volume
+                    ));
+                    if ui.button("stop").clicked() {
+                        ui.close_kind(eframe::egui::UiKind::Window);
+                        alarm.ringing = false;
+                        self.sender
+                            .send(communication::Message::new(
+                                communication::MessageType::AlarmStopped,
+                                alarm.id,
+                            ))
+                            .unwrap();
+                    }
+                });
             }
             let alarm_changed = alarm.render_alarm(&self.config.time_format, ui, ctx);
             if alarm_changed {
+                alarm.ringing = true;
                 // even if alarm.enabled is false or alarm.rang_today is false
                 // it may have been rang today or enabled but the user changed the alarm
                 alarm.send_stop(&self.sender);
@@ -163,7 +184,7 @@ impl Clock {
     }
 
     fn save(&self) {
-        self.config.save(Config::config_path());
+        self.config.clone().save(Config::config_path());
     }
 }
 
@@ -172,7 +193,7 @@ impl eframe::App for Clock {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // always update so time keeping/alarm triggers are accurate
         // maybe we need another thread to do this instead of via the gui and use message passing to update the alarms instead
-        ctx.request_repaint();
+        // ctx.request_repaint();
         self.sender.send(communication::Message::new(
             communication::MessageType::UpdateCtx(ctx.clone()),
             0,

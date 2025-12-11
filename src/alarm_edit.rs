@@ -32,6 +32,7 @@ impl AlarmBuilder {
             enabled: true,
             editing: None,
             rang_today: false,
+            ringing: false,
             id: get_uid(),
         }
     }
