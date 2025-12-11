@@ -125,14 +125,15 @@ impl Clock {
                     .signed_duration_since(alarm.time)
                     .num_seconds();
                 // should ring alarm if within minute of alarm time
-                if num_seconds < 60 && num_seconds >= 0 {
+                if (0..60).contains(&num_seconds) {
                     let alarm_buffer = BufReader::new(
-                        std::fs::File::open(&self.config.sounds[&alarm.sound].path).expect(
-                            format!(
-                                "couldn't open sound file {}",
-                                &self.config.sounds[&alarm.sound].path.display()
-                            )
-                            .as_str(),
+                        std::fs::File::open(&self.config.sounds[&alarm.sound].path).unwrap_or_else(
+                            |_| {
+                                panic!(
+                                    "couldn't open sound file {}",
+                                    &self.config.sounds[&alarm.sound].path.display()
+                                )
+                            },
                         ),
                     );
                     self.sender
@@ -172,6 +173,10 @@ impl eframe::App for Clock {
         // always update so time keeping/alarm triggers are accurate
         // maybe we need another thread to do this instead of via the gui and use message passing to update the alarms instead
         ctx.request_repaint();
+        self.sender.send(communication::Message::new(
+            communication::MessageType::UpdateCtx(ctx.clone()),
+            0,
+        ));
         // an alarm need to keep state of its been rang today
 
         ctx.set_visuals(self.config.theme.into());

@@ -164,7 +164,7 @@ impl From<Alarm> for AlarmBuilder {
 
 impl AddAssign for Alarm {
     /// used so that when we edit an alarm we don't lose its id
-    /// also so to reset the rang_today field
+    /// also so to reset the `rang_today` field
     fn add_assign(&mut self, rhs: Self) {
         self.time = rhs.time;
         self.volume = rhs.volume;

@@ -23,4 +23,5 @@ pub enum MessageType {
     },
     // if the alarm is disabled/removed/time changed
     AlarmStopped,
+    UpdateCtx(Context),
 }

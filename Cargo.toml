@@ -13,22 +13,22 @@ keywords = ["rooster", "alarm", "clock", "alarm-clock"]
 
 [dependencies]
 # gui crates
-eframe = { version = "0.23.0" }
+eframe = { version = "0.33.2" }
 # time crates
 chrono = "0.4.31"
 # logging crates
-simple_file_logger = "0.3.1"
+simple_file_logger = "0.4.2"
 log = "0.4.17"
 
 # file selection dialogs
-rfd = "0.12.1"
+rfd = "0.16.0"
 
 # sound crates
-rodio = "0.17.3"
+rodio = "0.21.1"
 
 # config crates
-directories = "5.0.1"
+directories = "6.0.0"
 serde = "1.0.190"
-toml-datetime-compat = {version = "0.2.0", features = ["chrono"]}
-toml = "0.8.6"
+toml-datetime-compat = {version = "0.3.0", features = ["chrono"]}
+toml = "0.9.8"
 clap = { version = "4.4.7", features = ["derive"] }

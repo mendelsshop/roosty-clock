@@ -104,7 +104,7 @@ impl AlarmBuilder {
         self.render_volume_slider(ui);
     }
 
-    pub(crate) fn render_custom_alarm_sound_editor(&mut self, _ui: &mut egui::Ui) {
+    pub(crate) const fn render_custom_alarm_sound_editor(&mut self, _ui: &mut egui::Ui) {
         // if let AlarmSound::Custom(path, name) = &mut self.sound {
         //     ui.horizontal(|ui| {
         //         ui.text_edit_singleline(name);
@@ -129,7 +129,7 @@ impl AlarmBuilder {
             // TODO: make something that automates this
             ScrollArea::vertical().id_source("alarm").show(ui, |ui| {
                 for name in sounds.keys() {
-                    ui.selectable_value(&mut self.sound, name.to_string(), name);
+                    ui.selectable_value(&mut self.sound, name.clone(), name);
                 }
             });
         });

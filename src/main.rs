@@ -2,10 +2,10 @@ use std::{collections::HashMap, error::Error, fs, io::Write, path::PathBuf, thre
 
 use clap::{command, Parser, Subcommand};
 use eframe::{
-    egui::{Context, Window},
+    egui::{ViewportBuilder, Window},
     run_native,
 };
-use rodio::{decoder, source, Sink, Source};
+use rodio::{decoder, Sink, Source};
 use roosty_clock::{
     communication::{Message, MessageType},
     config::Config,
@@ -34,13 +34,16 @@ enum Command {
         sound: String,
     },
 }
-
+// TODO: make sure alarm ring is audible even when the system volume is low or muted
 fn main() -> Result<(), Box<dyn Error>> {
     // initilize the logger
     simple_file_logger::init_logger!("roosty_clock").expect("couldn't initialize logger");
     // make app trnsparent
     let native_options = eframe::NativeOptions {
-        transparent: true,
+        viewport: ViewportBuilder {
+            transparent: Some(true),
+            ..Default::default()
+        },
         ..Default::default()
     };
 
@@ -69,22 +72,25 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let (tx, rx) = std::sync::mpsc::channel();
     thread::spawn(move || {
-        let (_stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
-        let mut alarm_map: HashMap<usize, (f32, Sink, Context)> = HashMap::new();
+        let stream_handle = rodio::OutputStreamBuilder::open_default_stream().unwrap();
+        let mut alarm_map: HashMap<usize, (f32, Sink)> = HashMap::new();
+        let mut ctx = None;
         loop {
             for alarm in &alarm_map {
                 alarm.1 .1.set_volume(alarm.1 .0 / 100.0);
                 // passing this context around makes panic
                 // window to turn off the alarm
-                Window::new("Alarm Triggered").show(&alarm.1 .2, |ui| {
-                    ui.label(format!(
-                        "alarm {} triggered with volume {}",
-                        alarm.0, alarm.1 .0
-                    ));
-                    if ui.button("stop").clicked() {
-                        alarm.1 .1.stop();
-                    }
-                });
+                Window::new("Alarm Triggered")
+                    .auto_sized()
+                    .show(ctx.as_ref().unwrap(), |ui| {
+                        ui.label(format!(
+                            "alarm {} triggered with volume {}",
+                            alarm.0, alarm.1 .0
+                        ));
+                        if ui.button("stop").clicked() {
+                            alarm.1 .1.stop();
+                        }
+                    });
             }
             match rx.recv_timeout(std::time::Duration::from_millis(10)) {
                 Ok(Message {
@@ -93,15 +99,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }) => {
                     println!("alarm {alarm_id} triggered with volume {volume}");
                     // create source that repeatedly plays the sound at the specified volume and play it
-                    let input = decoder::Decoder::new(sound)
-                        .unwrap()
-                        .convert_samples::<f32>()
-                        .repeat_infinite();
-                    let sink = Sink::try_new(&stream_handle).unwrap();
+                    let input = decoder::Decoder::new(sound).unwrap().repeat_infinite();
+                    let sink = Sink::connect_new(stream_handle.mixer());
                     sink.set_volume(volume / 100.0);
                     sink.append(input);
                     sink.play();
-                    alarm_map.insert(alarm_id, (volume, sink, ctx));
+                    alarm_map.insert(alarm_id, (volume, sink));
                 }
                 Ok(Message {
                     kind: MessageType::AlarmStopped,
@@ -112,6 +115,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                         alarm.1.stop();
                     }
                 }
+                Ok(Message {
+                    kind: MessageType::UpdateCtx(new_ctx),
+                    alarm_id,
+                }) => {
+                    // println!("updating context");
+                    // if ctx.is_none() {
+                    ctx = Some(new_ctx);
+                    // }
+                }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
                 Err(_) => {}
             }
@@ -121,7 +133,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     run_native(
         "Roosty Clock",
         native_options,
-        Box::new(|_| Box::new(Clock::new(tx))),
+        Box::new(|_| Ok(Box::new(Clock::new(tx)))),
     )
     .map_err(|e| e.into())
 }
