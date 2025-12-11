@@ -39,7 +39,6 @@ enum Command {
         sound: String,
     },
 }
-// TODO: make sure alarm ring is audible even when the system volume is low or muted
 fn main() -> Result<(), Box<dyn Error>> {
     // initilize the logger
     simple_file_logger::init_logger!("roosty_clock").expect("couldn't initialize logger");

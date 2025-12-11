@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::NaiveTime;
-use eframe::egui::{self, ScrollArea, Window};
+use eframe::egui::{self, ScrollArea, TextEdit, Widget, Window};
 
 use crate::{
     config::{self, get_uid, Alarm, Sound},
@@ -72,22 +72,60 @@ impl AlarmBuilder {
     pub(crate) fn render_minute_selector(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.label("Minute");
-            ScrollArea::vertical().id_source("minutes").show(ui, |ui| {
-                (0..=59).for_each(|i| {
-                    ui.selectable_value(&mut self.minute, i, i.to_string());
-                });
-            });
+            if ui.button("Up").clicked() && self.minute < 60 {
+                self.minute += 1;
+                self.minute_string = self.minute.to_string();
+            }
+            if {
+                TextEdit::singleline(&mut self.minute_string)
+                    .desired_width(20.0)
+                    .char_limit(2)
+                    .ui(&mut *ui)
+            }
+            .lost_focus()
+            {
+                // if the input value is vaild, update the value
+                if let Ok(parsed_value) = self.minute_string.parse::<u8>() {
+                    self.minute = parsed_value.clamp(0, 60);
+                }
+                // sync the input value and the value regardless
+                self.minute_string = self.minute.to_string();
+            }
+
+            if ui.button("Down").clicked() && self.minute > 0 {
+                self.minute -= 1;
+                self.minute_string = self.minute.to_string();
+            }
         });
     }
 
     pub(crate) fn render_hour_selector(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.label("Hour");
-            ScrollArea::vertical().id_source("hours").show(ui, |ui| {
-                (1..=12).for_each(|i| {
-                    ui.selectable_value(&mut self.hour, if i == 12 { 0 } else { i }, i.to_string());
-                });
-            });
+            if ui.button("Up").clicked() && self.hour < 12 {
+                self.hour += 1;
+                self.hour_string = self.hour.to_string();
+            }
+            if {
+                TextEdit::singleline(&mut self.hour_string)
+                    .desired_width(20.0)
+                    .char_limit(2)
+                    .ui(&mut *ui)
+            }
+            .lost_focus()
+            {
+                // if the input value is vaild, update the value
+                if let Ok(parsed_value) = self.hour_string.parse::<u8>() {
+                    self.hour = parsed_value.clamp(0, 12);
+                }
+                // sync the input value and the value regardless
+                self.hour_string = self.hour.to_string();
+            }
+
+            if ui.button("Down").clicked() && self.hour > 0 {
+                self.hour -= 1;
+                self.hour_string = self.hour.to_string();
+            }
         });
     }
 
@@ -174,3 +212,27 @@ pub enum EditingState {
     Editing,
     Done(Alarm),
 }
+struct U8Buffer<'a>(&'a mut u8);
+// impl TextBuffer for U8Buffer<'_> {
+//     fn is_mutable(&self) -> bool {
+//         true
+//     }
+//
+//     fn as_str(&self) -> &str {
+//         5u8.hash
+//
+//         // self.0.to_string().as_str()
+//     }
+//
+//     fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
+//         todo!()
+//     }
+//
+//     fn delete_char_range(&mut self, char_range: std::ops::Range<usize>) {
+//         todo!()
+//     }
+//
+//     fn type_id(&self) -> std::any::TypeId {
+//         todo!()
+//     }
+// }

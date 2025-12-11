@@ -34,7 +34,9 @@ pub struct Clock {
 pub struct AlarmBuilder {
     name: String,
     hour: u8,
+    hour_string: String,
     minute: u8,
+    minute_string: String,
     time_of_day: TimeOfDay,
     sound: String,
     volume: f32,
@@ -44,10 +46,14 @@ impl Default for AlarmBuilder {
     fn default() -> Self {
         let time = chrono::Local::now().naive_local().time();
         let (ampm, hour) = time.hour12();
+        let hour = if hour == 12 { 0 } else { hour };
+        let minute = time.minute();
         Self {
             name: String::default(),
-            hour: if hour == 12 { 0 } else { hour } as u8,
-            minute: time.minute() as u8,
+            hour: hour as u8,
+            hour_string: hour.to_string(),
+            minute: minute as u8,
+            minute_string: minute.to_string(),
             time_of_day: if ampm { TimeOfDay::PM } else { TimeOfDay::AM },
             sound: Sound::get_default_name(),
             volume: 100.0,
@@ -213,7 +219,7 @@ impl eframe::App for Clock {
                 EditingState::Done(new_alarm) => {
                     self.adding_alarm = None;
                     self.config.alarms.push(new_alarm);
-                    self.config.save(Config::config_path());
+                    Self::save(self);
                 }
                 EditingState::Cancelled => {
                     self.adding_alarm = None;

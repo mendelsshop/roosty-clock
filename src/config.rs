@@ -153,10 +153,15 @@ pub struct Alarm {
 impl From<Alarm> for AlarmBuilder {
     fn from(alarm: Alarm) -> Self {
         let (ampm, hour) = alarm.time.hour12();
+
+        let hour = if hour == 12 { 0 } else { hour };
+        let minute = alarm.time.minute();
         Self {
             name: alarm.name.unwrap_or_default(),
-            hour: if hour == 12 { 0 } else { hour } as u8,
-            minute: alarm.time.minute() as u8,
+            hour: hour as u8,
+            hour_string: hour.to_string(),
+            minute: minute as u8,
+            minute_string: minute.to_string(),
             time_of_day: if ampm { TimeOfDay::PM } else { TimeOfDay::AM },
             sound: alarm.sound,
             volume: alarm.volume,
