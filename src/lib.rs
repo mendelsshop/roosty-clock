@@ -179,7 +179,6 @@ impl Clock {
             }
             let alarm_changed = alarm.render_alarm(&self.config.time_format, ui, ctx);
             if alarm_changed {
-                alarm.ringing = true;
                 // even if alarm.enabled is false or alarm.rang_today is false
                 // it may have been rang today or enabled but the user changed the alarm
                 alarm.send_stop(&self.sender);

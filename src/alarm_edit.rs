@@ -166,7 +166,7 @@ impl AlarmBuilder {
             // set size of alarm selector so it doesnt make alarm creation to big when using cutom alarm
             // pick an alarm sound
             // TODO: make something that automates this
-            ScrollArea::vertical().id_source("alarm").show(ui, |ui| {
+            ScrollArea::vertical().id_salt("alarm").show(ui, |ui| {
                 for name in sounds.keys() {
                     ui.selectable_value(&mut self.sound, name.clone(), name);
                 }
@@ -212,27 +212,3 @@ pub enum EditingState {
     Editing,
     Done(Alarm),
 }
-struct U8Buffer<'a>(&'a mut u8);
-// impl TextBuffer for U8Buffer<'_> {
-//     fn is_mutable(&self) -> bool {
-//         true
-//     }
-//
-//     fn as_str(&self) -> &str {
-//         5u8.hash
-//
-//         // self.0.to_string().as_str()
-//     }
-//
-//     fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
-//         todo!()
-//     }
-//
-//     fn delete_char_range(&mut self, char_range: std::ops::Range<usize>) {
-//         todo!()
-//     }
-//
-//     fn type_id(&self) -> std::any::TypeId {
-//         todo!()
-//     }
-// }

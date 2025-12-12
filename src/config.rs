@@ -193,8 +193,7 @@ impl Alarm {
         ui.scope(|ui| {
             // gray out color if alarm is disabled
             if !self.enabled {
-                let faded = ui.visuals().fade_out_to_color();
-                ui.visuals_mut().panel_fill = faded;
+                ui.set_opacity(ui.visuals().disabled_alpha());
             }
 
             ui.horizontal(|ui| {
