@@ -188,6 +188,7 @@ impl Alarm {
         time_format: &str,
         ui: &mut eframe::egui::Ui,
         ctx: &eframe::egui::Context,
+        sounds: &mut HashMap<String, Sound>,
     ) -> bool {
         let mut ret = false;
         ui.scope(|ui| {
@@ -220,7 +221,7 @@ impl Alarm {
 
             if let Some(editing) = &mut self.editing {
                 // TODO: passing the actual sounds
-                match editing.render_alarm_editor(ctx, &mut HashMap::new()) {
+                match editing.render_alarm_editor(ctx, sounds) {
                     EditingState::Done(new_alarm) => {
                         self.editing = None;
                         ret = true;

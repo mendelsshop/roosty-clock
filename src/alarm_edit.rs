@@ -176,7 +176,7 @@ impl AlarmBuilder {
 
     pub fn render_volume_slider(&mut self, ui: &mut egui::Ui) {
         ui.add(
-            egui::Slider::new(&mut self.volume, 100.0..=00.0)
+            egui::Slider::new(&mut self.volume, 0.0..=100.0)
                 .vertical()
                 .integer()
                 .suffix("%")

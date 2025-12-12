@@ -177,7 +177,8 @@ impl Clock {
                     }
                 });
             }
-            let alarm_changed = alarm.render_alarm(&self.config.time_format, ui, ctx);
+            let alarm_changed =
+                alarm.render_alarm(&self.config.time_format, ui, ctx, &mut self.config.sounds);
             if alarm_changed {
                 // even if alarm.enabled is false or alarm.rang_today is false
                 // it may have been rang today or enabled but the user changed the alarm
