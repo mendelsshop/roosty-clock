@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, path::Path};
+use std::{collections::HashMap, ffi::OsStr, path::Path};
 
 use chrono::NaiveTime;
 use eframe::egui::{self, ScrollArea, TextEdit, Widget, Window};
@@ -130,16 +130,24 @@ impl AlarmBuilder {
     }
 
     pub(crate) fn render_sound_editor(&mut self, ui: &mut egui::Ui, sounds: &mut Sounds) {
-        ui.vertical(|ui| {
-            // alarm sound
-            self.render_alarm_sound_selector(ui, sounds);
-            // set custom alarm sound stuff
-            Self::render_custom_alarm_sound_editor(sounds, ui);
-        });
+        Self::render_sound_selector_editor(&mut self.sound, ui, &mut sounds.sounds);
         self.render_volume_slider(ui);
     }
 
-    pub(crate) fn render_custom_alarm_sound_editor(sounds: &mut Sounds, ui: &mut egui::Ui) {
+    pub(crate) fn render_sound_selector_editor(
+        sound: &mut String,
+        ui: &mut egui::Ui,
+        sounds: &mut HashMap<String, Sound>,
+    ) {
+        ui.vertical(|ui| {
+            // alarm sound
+            Self::render_alarm_sound_selector(sound, ui, sounds);
+            // set custom alarm sound stuff
+            Self::render_custom_alarm_sound_editor(sounds, ui);
+        });
+    }
+
+    fn render_custom_alarm_sound_editor(sounds: &mut HashMap<String, Sound>, ui: &mut egui::Ui) {
         if ui.button("Custom").clicked() {
             // TODO: rfd with gnome opens Recents not audio folder https://github.com/PolyMeilex/rfd/issues/237
             let file_dialog = rfd::FileDialog::new().set_title("Pick alarm sound");
@@ -156,7 +164,7 @@ impl AlarmBuilder {
             if let Some(paths) = { file_dialog }.pick_files() {
                 paths.iter().for_each(|path_name| {
                     if let Some(name) = path_name.file_prefix().and_then(OsStr::to_str) {
-                        sounds.sounds.insert(
+                        sounds.insert(
                             name.to_string(),
                             Sound {
                                 name: name.to_string(),
@@ -169,14 +177,18 @@ impl AlarmBuilder {
         }
     }
 
-    pub(crate) fn render_alarm_sound_selector(&mut self, ui: &mut egui::Ui, sounds: &mut Sounds) {
+    pub(crate) fn render_alarm_sound_selector(
+        sound: &mut String,
+        ui: &mut egui::Ui,
+        sounds: &mut HashMap<String, Sound>,
+    ) {
         ui.vertical(|ui| {
             // set size of alarm selector so it doesnt make alarm creation to big when using cutom alarm
             // pick an alarm sound
             // TODO: make something that automates this
             ScrollArea::vertical().id_salt("alarm").show(ui, |ui| {
-                for name in sounds.sounds.keys() {
-                    ui.selectable_value(&mut self.sound, name.clone(), name);
+                for name in sounds.keys() {
+                    ui.selectable_value(sound, name.clone(), name);
                 }
             });
         });

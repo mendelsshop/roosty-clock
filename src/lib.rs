@@ -77,6 +77,13 @@ impl Clock {
             if ui.button("x").clicked() {
                 self.in_config = false;
             }
+            ui.label("Default Sound");
+            AlarmBuilder::render_sound_selector_editor(
+                &mut self.config.sounds.default_sound,
+                ui,
+                &mut self.config.sounds.sounds,
+            );
+            self.config.save(Config::config_path());
         });
     }
 
