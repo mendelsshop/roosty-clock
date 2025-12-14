@@ -133,14 +133,13 @@ impl Clock {
                 // should ring alarm if within minute of alarm time
                 if (0..60).contains(&num_seconds) {
                     let alarm_buffer = BufReader::new(
-                        std::fs::File::open(&self.config.sounds[&alarm.sound].path).unwrap_or_else(
-                            |_| {
+                        std::fs::File::open(&self.config.sounds.sounds[&alarm.sound].path)
+                            .unwrap_or_else(|_| {
                                 panic!(
                                     "couldn't open sound file {}",
-                                    &self.config.sounds[&alarm.sound].path.display()
+                                    &self.config.sounds.sounds[&alarm.sound].path.display()
                                 )
-                            },
-                        ),
+                            }),
                     );
                     self.sender
                         .send(communication::Message::new(
@@ -232,7 +231,10 @@ impl eframe::App for Clock {
         // // show all alarms
         CentralPanel::default().show(ctx, |ui| {
             if ui.button("+").on_hover_text("add alarm").clicked() {
-                self.adding_alarm = Some(AlarmBuilder::default());
+                self.adding_alarm = Some(AlarmBuilder {
+                    sound: self.config.sounds.default_sound.clone(),
+                    ..Default::default()
+                });
             }
 
             ScrollArea::vertical().show(ui, |ui| {

@@ -1,10 +1,10 @@
-use std::{collections::HashMap, ffi::OsStr, path::Path};
+use std::{ffi::OsStr, path::Path};
 
 use chrono::NaiveTime;
 use eframe::egui::{self, ScrollArea, TextEdit, Widget, Window};
 
 use crate::{
-    config::{self, get_uid, Alarm, Sound},
+    config::{self, get_uid, Alarm, Sound, Sounds},
     AlarmBuilder, TimeOfDay,
 };
 
@@ -37,7 +37,7 @@ impl AlarmBuilder {
         }
     }
 
-    pub(crate) fn edit_alarm(&mut self, ui: &mut egui::Ui, sounds: &mut HashMap<String, Sound>) {
+    pub(crate) fn edit_alarm(&mut self, ui: &mut egui::Ui, sounds: &mut Sounds) {
         ui.text_edit_singleline(&mut self.name);
         ui.horizontal(|ui| {
             self.render_time_editor(ui);
@@ -129,11 +129,7 @@ impl AlarmBuilder {
         });
     }
 
-    pub(crate) fn render_sound_editor(
-        &mut self,
-        ui: &mut egui::Ui,
-        sounds: &mut HashMap<String, Sound>,
-    ) {
+    pub(crate) fn render_sound_editor(&mut self, ui: &mut egui::Ui, sounds: &mut Sounds) {
         ui.vertical(|ui| {
             // alarm sound
             self.render_alarm_sound_selector(ui, sounds);
@@ -143,10 +139,7 @@ impl AlarmBuilder {
         self.render_volume_slider(ui);
     }
 
-    pub(crate) fn render_custom_alarm_sound_editor(
-        sounds: &mut HashMap<String, Sound>,
-        ui: &mut egui::Ui,
-    ) {
+    pub(crate) fn render_custom_alarm_sound_editor(sounds: &mut Sounds, ui: &mut egui::Ui) {
         if ui.button("Custom").clicked() {
             // TODO: rfd with gnome opens Recents not audio folder https://github.com/PolyMeilex/rfd/issues/237
             let file_dialog = rfd::FileDialog::new().set_title("Pick alarm sound");
@@ -158,31 +151,31 @@ impl AlarmBuilder {
             };
 
             // TODO: maybe copy sound to sound directory
-            if let Some(path_name) = { file_dialog }.pick_file() {
-                if let Some(name) = path_name.file_prefix().and_then(OsStr::to_str) {
-                    sounds.insert(
-                        name.to_string(),
-                        Sound {
-                            name: name.to_string(),
-                            path: path_name,
-                        },
-                    );
-                }
+
+            // when done in alarm editor which one do we pick if we have multiple alarms
+            if let Some(paths) = { file_dialog }.pick_files() {
+                paths.iter().for_each(|path_name| {
+                    if let Some(name) = path_name.file_prefix().and_then(OsStr::to_str) {
+                        sounds.sounds.insert(
+                            name.to_string(),
+                            Sound {
+                                name: name.to_string(),
+                                path: path_name.clone(),
+                            },
+                        );
+                    }
+                });
             }
         }
     }
 
-    pub(crate) fn render_alarm_sound_selector(
-        &mut self,
-        ui: &mut egui::Ui,
-        sounds: &mut HashMap<String, Sound>,
-    ) {
+    pub(crate) fn render_alarm_sound_selector(&mut self, ui: &mut egui::Ui, sounds: &mut Sounds) {
         ui.vertical(|ui| {
             // set size of alarm selector so it doesnt make alarm creation to big when using cutom alarm
             // pick an alarm sound
             // TODO: make something that automates this
             ScrollArea::vertical().id_salt("alarm").show(ui, |ui| {
-                for name in sounds.keys() {
+                for name in sounds.sounds.keys() {
                     ui.selectable_value(&mut self.sound, name.clone(), name);
                 }
             });
@@ -202,7 +195,7 @@ impl AlarmBuilder {
     pub fn render_alarm_editor(
         &mut self,
         ctx: &egui::Context,
-        sounds: &mut HashMap<String, Sound>,
+        sounds: &mut Sounds,
     ) -> EditingState {
         let mut ret = EditingState::Editing;
         // if no alarm name set we need way to differentiate between different alarms

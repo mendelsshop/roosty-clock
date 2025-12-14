@@ -44,7 +44,13 @@ pub struct Config {
     #[serde(default)]
     pub(crate) theme: Theme,
     pub(crate) alarms: Vec<Alarm>,
+    #[serde(flatten)]
+    pub(crate) sounds: Sounds,
+}
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Sounds {
     pub(crate) sounds: HashMap<String, Sound>,
+    pub(crate) default_sound: String,
 }
 
 impl Default for Config {
@@ -57,15 +63,18 @@ impl Default for Config {
             // BingBong,
             // TickTock,
             // Rain,
-            sounds: vec![
-                ("ring".to_string(), Sound::ring()),
-                ("bing bong".to_string(), Sound::bing_bong()),
-                ("tick tock".to_string(), Sound::tick_tock()),
-                ("beep beep".to_string(), Sound::beep_beep()),
-                ("rain".to_string(), Sound::rain()),
-            ]
-            .into_iter()
-            .collect(),
+            sounds: Sounds {
+                sounds: vec![
+                    ("ring".to_string(), Sound::ring()),
+                    ("bing bong".to_string(), Sound::bing_bong()),
+                    ("tick tock".to_string(), Sound::tick_tock()),
+                    ("beep beep".to_string(), Sound::beep_beep()),
+                    ("rain".to_string(), Sound::rain()),
+                ]
+                .into_iter()
+                .collect(),
+                default_sound: "beep beep".to_string(),
+            },
         }
     }
 }
@@ -188,7 +197,7 @@ impl Alarm {
         time_format: &str,
         ui: &mut eframe::egui::Ui,
         ctx: &eframe::egui::Context,
-        sounds: &mut HashMap<String, Sound>,
+        sounds: &mut Sounds,
     ) -> bool {
         let mut ret = false;
         ui.scope(|ui| {
@@ -274,14 +283,14 @@ impl fmt::Display for Sound {
 
 impl Default for Sound {
     fn default() -> Self {
-        Self::ring()
+        Self::beep_beep()
     }
 }
 
 impl Sound {
     #[must_use]
     pub fn get_default_name() -> String {
-        Self::ring().name
+        Self::default().name
     }
 
     #[must_use]
