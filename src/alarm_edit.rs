@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ffi::OsStr, path::Path};
 
 use chrono::NaiveTime;
 use eframe::egui::{self, ScrollArea, TextEdit, Widget, Window};
@@ -138,23 +138,38 @@ impl AlarmBuilder {
             // alarm sound
             self.render_alarm_sound_selector(ui, sounds);
             // set custom alarm sound stuff
-            self.render_custom_alarm_sound_editor(ui);
+            Self::render_custom_alarm_sound_editor(sounds, ui);
         });
         self.render_volume_slider(ui);
     }
 
-    pub(crate) const fn render_custom_alarm_sound_editor(&mut self, _ui: &mut egui::Ui) {
-        // if let AlarmSound::Custom(path, name) = &mut self.sound {
-        //     ui.horizontal(|ui| {
-        //         ui.text_edit_singleline(name);
-        //         if ui.button("file").clicked() {
-        //             // TODO: validate is a sound file
-        //             if let Some(path_name) = rfd::FileDialog::new().pick_file() {
-        //                 *path = path_name;
-        //             }
-        //         }
-        //     });
-        // }
+    pub(crate) fn render_custom_alarm_sound_editor(
+        sounds: &mut HashMap<String, Sound>,
+        ui: &mut egui::Ui,
+    ) {
+        if ui.button("Custom").clicked() {
+            // TODO: rfd with gnome opens Recents not audio folder https://github.com/PolyMeilex/rfd/issues/237
+            let file_dialog = rfd::FileDialog::new().set_title("Pick alarm sound");
+            let file_dialog = match directories::UserDirs::new()
+                .and_then(|u| u.audio_dir().map(Path::to_path_buf))
+            {
+                Some(audio_path) => file_dialog.set_directory(audio_path),
+                None => file_dialog,
+            };
+
+            // TODO: maybe copy sound to sound directory
+            if let Some(path_name) = { file_dialog }.pick_file() {
+                if let Some(name) = path_name.file_prefix().and_then(OsStr::to_str) {
+                    sounds.insert(
+                        name.to_string(),
+                        Sound {
+                            name: name.to_string(),
+                            path: path_name,
+                        },
+                    );
+                }
+            }
+        }
     }
 
     pub(crate) fn render_alarm_sound_selector(
