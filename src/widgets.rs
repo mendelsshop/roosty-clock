@@ -26,10 +26,9 @@ impl Widget for Knob<'_> {
             if let Some(new_value) = responce.interact_pointer_pos() {
                 // inverse of the math for drawing the point (see below) from a value
                 // since we are converting the point into a value
-                let angle =
-                    ((new_value - rect.center()).angle().to_degrees() + 90. + (part_angle / 2.))
-                        .rem_euclid(360.)
-                        / part_angle;
+                let angle = ((new_value - rect.center()).angle().to_degrees() + 90.)
+                    .rem_euclid(360.)
+                    / part_angle;
                 *self.value = angle.floor() as u8;
 
                 responce.mark_changed();
