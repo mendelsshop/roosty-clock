@@ -16,6 +16,7 @@ pub mod config;
 /// implementation of alarm editing for egui
 pub mod alarm_edit;
 pub mod communication;
+mod widgets;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TimeOfDay {
@@ -45,16 +46,19 @@ pub struct AlarmBuilder {
 impl Default for AlarmBuilder {
     fn default() -> Self {
         let time = chrono::Local::now().naive_local().time();
-        let (ampm, hour) = time.hour12();
-        let hour = if hour == 12 { 0 } else { hour };
+        let hour = time.hour();
         let minute = time.minute();
         Self {
             name: String::default(),
-            hour: hour as u8,
-            hour_string: hour.to_string(),
+            hour: (hour % 12) as u8,
+            hour_string: Self::hour_string(hour as u8 % 12),
             minute: minute as u8,
             minute_string: minute.to_string(),
-            time_of_day: if ampm { TimeOfDay::PM } else { TimeOfDay::AM },
+            time_of_day: if hour >= 12 {
+                TimeOfDay::PM
+            } else {
+                TimeOfDay::AM
+            },
             sound: Sound::get_default_name(),
             volume: 100.0,
         }

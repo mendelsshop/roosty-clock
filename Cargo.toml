@@ -25,6 +25,7 @@ rfd = "0.16.0"
 
 # sound crates
 rodio = "0.21.1"
+cpvc = { git = "https://github.com/xephyris/cpvc", version = "0.4.1" }
 
 # config crates
 directories = "6.0.0"
@@ -32,4 +33,3 @@ serde = "1.0.190"
 toml-datetime-compat = {version = "0.3.0", features = ["chrono"]}
 toml = "0.9.8"
 clap = { version = "4.5.53", features = ["derive"] }
-cpvc = { git = "https://github.com/xephyris/cpvc", version = "0.4.1" }

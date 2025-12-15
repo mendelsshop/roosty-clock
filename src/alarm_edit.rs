@@ -5,6 +5,7 @@ use eframe::egui::{self, ScrollArea, TextEdit, Widget, Window};
 
 use crate::{
     config::{self, get_uid, Alarm, Sound, Sounds},
+    widgets::Knob,
     AlarmBuilder, TimeOfDay,
 };
 
@@ -18,10 +19,14 @@ impl AlarmBuilder {
                 Some(self.name)
             },
             time: NaiveTime::from_hms_opt(
-                u32::from(if self.time_of_day == TimeOfDay::AM {
-                    self.hour
+                (if self.hour == 12 {
+                    0
                 } else {
-                    self.hour + 12
+                    u32::from(self.hour)
+                }) + (if self.time_of_day == TimeOfDay::AM {
+                    0
+                } else {
+                    12
                 }),
                 u32::from(self.minute),
                 0,
@@ -75,8 +80,7 @@ impl AlarmBuilder {
     pub(crate) fn render_minute_selector(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.label("Minute");
-            if ui.button("Up").clicked() && self.minute < 60 {
-                self.minute += 1;
+            if ui.add(Knob::new(&mut self.minute, 0, 59)).changed() {
                 self.minute_string = self.minute.to_string();
             }
             if {
@@ -89,14 +93,9 @@ impl AlarmBuilder {
             {
                 // if the input value is vaild, update the value
                 if let Ok(parsed_value) = self.minute_string.parse::<u8>() {
-                    self.minute = parsed_value.clamp(0, 60);
+                    self.minute = parsed_value.clamp(0, 59);
                 }
                 // sync the input value and the value regardless
-                self.minute_string = self.minute.to_string();
-            }
-
-            if ui.button("Down").clicked() && self.minute > 0 {
-                self.minute -= 1;
                 self.minute_string = self.minute.to_string();
             }
         });
@@ -105,10 +104,10 @@ impl AlarmBuilder {
     pub(crate) fn render_hour_selector(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.label("Hour");
-            if ui.button("Up").clicked() && self.hour < 12 {
-                self.hour += 1;
-                self.hour_string = self.hour.to_string();
+            if ui.add(Knob::new(&mut self.hour, 1, 12)).changed() {
+                self.hour_string = Self::hour_string(self.hour);
             }
+
             if {
                 TextEdit::singleline(&mut self.hour_string)
                     .desired_width(20.0)
@@ -119,17 +118,24 @@ impl AlarmBuilder {
             {
                 // if the input value is vaild, update the value
                 if let Ok(parsed_value) = self.hour_string.parse::<u8>() {
-                    self.hour = parsed_value.clamp(0, 12);
+                    let clamp = parsed_value.clamp(1, 12);
+                    if clamp == 12 {
+                        self.hour = 0;
+                    } else {
+                        self.hour = clamp;
+                    }
+                    self.hour_string = Self::hour_string(self.hour);
                 }
-                // sync the input value and the value regardless
-                self.hour_string = self.hour.to_string();
-            }
-
-            if ui.button("Down").clicked() && self.hour > 0 {
-                self.hour -= 1;
-                self.hour_string = self.hour.to_string();
             }
         });
+    }
+
+    pub(crate) fn hour_string(hour: u8) -> std::string::String {
+        if hour == 0 {
+            "12".to_string()
+        } else {
+            hour.to_string()
+        }
     }
 
     pub(crate) fn render_sound_editor(&mut self, ui: &mut egui::Ui, sounds: &mut Sounds) {
