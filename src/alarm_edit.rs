@@ -38,7 +38,10 @@ impl AlarmBuilder {
     }
 
     pub(crate) fn edit_alarm(&mut self, ui: &mut egui::Ui, sounds: &mut Sounds) {
-        ui.text_edit_singleline(&mut self.name);
+        ui.horizontal(|ui| {
+            ui.label("Alarm Name");
+            ui.text_edit_singleline(&mut self.name);
+        });
         ui.horizontal(|ui| {
             self.render_time_editor(ui);
             // // sound editor
