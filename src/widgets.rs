@@ -4,11 +4,21 @@ pub struct Knob<'a> {
     min: u8,
     max: u8,
     value: &'a mut u8,
+    hand_color: Option<Color32>,
+    fill: Option<Color32>,
+    stroke: Option<Stroke>,
 }
 
 impl<'a> Knob<'a> {
     pub const fn new(value: &'a mut u8, min: u8, max: u8) -> Self {
-        Self { min, max, value }
+        Self {
+            min,
+            max,
+            value,
+            hand_color: None,
+            fill: None,
+            stroke: None,
+        }
     }
 }
 impl Widget for Knob<'_> {
@@ -34,18 +44,28 @@ impl Widget for Knob<'_> {
                 responce.mark_changed();
             }
         }
-        ui.painter().circle_filled(rect.center(), 20., Color32::RED);
+        let visuals = ui.style().interact(&responce);
         ui.painter()
-            .circle_stroke(rect.center(), 20., Stroke::new(1., Color32::BLACK));
+            .circle_filled(rect.center(), 20., self.fill.unwrap_or(visuals.bg_fill));
+        ui.painter()
+            .circle_stroke(rect.center(), 20., self.stroke.unwrap_or(visuals.fg_stroke));
         // the angle of the current value
         // how many rotations of the of the part angle
         // we subtract 90 at the end to get the first value to be at the top
         let angle = (part_angle * f32::from(*self.value)) - 90.;
         let pointer = rect.center() + Vec2::angled(angle.to_radians()) * 20.;
         let pointer1 = rect.center() + Vec2::angled(angle.to_radians()) * 19.;
-        ui.painter()
-            .line_segment([rect.center(), pointer], Stroke::new(1., Color32::BLACK));
-        ui.painter().circle_filled(pointer1, 2., Color32::BLACK);
+        let mut stroke = visuals.fg_stroke;
+        if let Some(color) = self.hand_color {
+            stroke.color = color;
+        }
+
+        ui.painter().line_segment([rect.center(), pointer], stroke);
+        ui.painter().circle_filled(
+            pointer1,
+            2.,
+            self.hand_color.unwrap_or(visuals.fg_stroke.color),
+        );
         responce
     }
 }
