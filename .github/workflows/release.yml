@@ -11,7 +11,7 @@ jobs:
   Publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
       - name: setup rust
         uses: dtolnay/rust-toolchain@stable
       - run: |
@@ -54,7 +54,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get install -y musl-tools
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
       - run: cargo fetch --target ${{ matrix.target }}
       - name: Release build
         shell: bash
