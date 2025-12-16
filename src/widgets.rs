@@ -9,7 +9,7 @@ pub struct Knob<'a, N> {
     hand_color: Option<Color32>,
     fill: Option<Color32>,
     stroke: Option<Stroke>,
-    min_size: Vec2,
+    radius: Option<f32>,
 }
 
 impl<'a, N> Knob<'a, N> {
@@ -21,7 +21,7 @@ impl<'a, N> Knob<'a, N> {
             hand_color: None,
             fill: None,
             stroke: None,
-            min_size: Vec2::ZERO,
+            radius: None,
         }
     }
 }
@@ -30,7 +30,7 @@ where
     N: Sub<Output = N> + Add<Output = N> + Numeric,
     f32: From<N>,
 {
-    // TODO: parameterize size and maybe step, its bit more complicated)
+    // TODO: maybe parameterize step, its bit complicated
 
     // partially from https://github.com/obsqrbtz/egui_knob and https://codeberg.org/pintariching/egui_timepicker
     fn ui(self, ui: &mut eframe::egui::Ui) -> eframe::egui::Response {
@@ -41,10 +41,14 @@ where
             hand_color,
             fill,
             stroke,
-            min_size: _,
+            radius: _,
         } = self;
+
+        let desired_radius = self
+            .radius
+            .unwrap_or_else(|| ui.spacing().slider_width / 2.);
         let (rect, mut responce) =
-            ui.allocate_exact_size(Vec2::splat(40.), Sense::click_and_drag());
+            ui.allocate_exact_size(Vec2::splat(desired_radius * 2.), Sense::click_and_drag());
         // how many different values there are
         // the angle (degrees) for each part
         let part_angle = 360. / (f32::from(max - min) + 1.);
@@ -61,25 +65,33 @@ where
             }
         }
         let visuals = ui.style().interact(&responce);
+        ui.painter().circle_filled(
+            rect.center(),
+            desired_radius,
+            fill.unwrap_or(visuals.bg_fill),
+        );
+        let border_stroke = stroke.unwrap_or(visuals.fg_stroke);
         ui.painter()
-            .circle_filled(rect.center(), 20., fill.unwrap_or(visuals.bg_fill));
-        ui.painter()
-            .circle_stroke(rect.center(), 20., stroke.unwrap_or(visuals.fg_stroke));
+            .circle_stroke(rect.center(), desired_radius, border_stroke);
         // the angle of the current value
         // how many rotations of the of the part angle
         // we subtract 90 at the end to get the first value to be at the top
         let angle = (part_angle * f32::from(*value)) - 90.;
-        let pointer = rect.center() + Vec2::angled(angle.to_radians()) * 20.;
-        let pointer1 = rect.center() + Vec2::angled(angle.to_radians()) * 19.;
+        let pointer = rect.center() + Vec2::angled(angle.to_radians()) * desired_radius;
         let mut hand_stroke = visuals.fg_stroke;
         if let Some(color) = hand_color {
             hand_stroke.color = color;
         }
 
+        let pointer1 = rect.center()
+            + Vec2::angled(angle.to_radians()) * border_stroke.width.mul_add(-2., desired_radius);
         ui.painter()
             .line_segment([rect.center(), pointer], hand_stroke);
-        ui.painter()
-            .circle_filled(pointer1, 2., hand_color.unwrap_or(visuals.fg_stroke.color));
+        ui.painter().circle_filled(
+            pointer1,
+            hand_stroke.width * 2.,
+            hand_color.unwrap_or(visuals.fg_stroke.color),
+        );
         responce
     }
 }
