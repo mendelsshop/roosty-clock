@@ -1,6 +1,9 @@
-use std::ops::{Add, Sub};
+use std::{
+    iter,
+    ops::{Add, Sub},
+};
 
-use eframe::egui::{emath::Numeric, Color32, Sense, Stroke, Vec2, Widget};
+use eframe::egui::{emath::Numeric, Align2, Color32, Sense, Stroke, TextStyle, Vec2, Widget};
 
 pub struct Knob<'a, N> {
     min: N,
@@ -10,6 +13,7 @@ pub struct Knob<'a, N> {
     fill: Option<Color32>,
     stroke: Option<Stroke>,
     radius: Option<f32>,
+    show_values: bool,
 }
 
 impl<'a, N> Knob<'a, N> {
@@ -22,12 +26,43 @@ impl<'a, N> Knob<'a, N> {
             fill: None,
             stroke: None,
             radius: None,
+            show_values: false,
         }
+    }
+
+    /// Show the values around the knob
+    pub const fn show_values(mut self, show_values: bool) -> Self {
+        self.show_values = show_values;
+        self
+    }
+
+    /// Set how big the knob should be relative to its radius
+    pub const fn radius(mut self, radius: Option<f32>) -> Self {
+        self.radius = radius;
+        self
+    }
+
+    // set the outline color of the knob
+    pub const fn stroke(mut self, stroke: Option<Stroke>) -> Self {
+        self.stroke = stroke;
+        self
+    }
+
+    // set the background color of the knob
+    pub const fn fill(mut self, fill: Option<Color32>) -> Self {
+        self.fill = fill;
+        self
+    }
+
+    // set the hand color of the knob
+    pub const fn hand_color(mut self, hand_color: Option<Color32>) -> Self {
+        self.hand_color = hand_color;
+        self
     }
 }
 impl<N> Widget for Knob<'_, N>
 where
-    N: Sub<Output = N> + Add<Output = N> + Numeric,
+    N: Sub<Output = N> + Add<Output = N> + Numeric + ToString,
     f32: From<N>,
 {
     // TODO: maybe parameterize step, its bit complicated
@@ -41,12 +76,11 @@ where
             hand_color,
             fill,
             stroke,
-            radius: _,
+            radius,
+            show_values,
         } = self;
 
-        let desired_radius = self
-            .radius
-            .unwrap_or_else(|| ui.spacing().slider_width / 2.);
+        let desired_radius = radius.unwrap_or_else(|| ui.spacing().slider_width / 2.);
         let (rect, mut responce) =
             ui.allocate_exact_size(Vec2::splat(desired_radius * 2.), Sense::click_and_drag());
         // how many different values there are
@@ -70,7 +104,26 @@ where
             desired_radius,
             fill.unwrap_or(visuals.bg_fill),
         );
+        let step = N::from_f64(1f64);
         let border_stroke = stroke.unwrap_or(visuals.fg_stroke);
+        if show_values {
+            for i in iter::successors(Some(min), |n| {
+                let succ = *n + step;
+                (succ <= max).then_some(succ)
+            }) {
+                let angle = (part_angle * f32::from(i)) - 90.;
+                let pointer = rect.center()
+                    + Vec2::angled(angle.to_radians())
+                        * (desired_radius - ui.style().spacing.icon_width_inner);
+                ui.painter().text(
+                    pointer,
+                    Align2::CENTER_CENTER,
+                    i.to_string(),
+                    TextStyle::Monospace.resolve(ui.style()),
+                    ui.style().visuals.text_color(),
+                );
+            }
+        }
         ui.painter()
             .circle_stroke(rect.center(), desired_radius, border_stroke);
         // the angle of the current value

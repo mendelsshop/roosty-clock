@@ -16,7 +16,7 @@ pub mod config;
 /// implementation of alarm editing for egui
 pub mod alarm_edit;
 pub mod communication;
-mod widgets;
+pub mod widgets;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TimeOfDay {

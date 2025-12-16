@@ -93,7 +93,7 @@ impl AlarmBuilder {
     pub(crate) fn render_hour_selector(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.label("Hour");
-            ui.add(Knob::new(&mut self.hour, 1, 12));
+            ui.add(Knob::new(&mut self.hour, 1, 12).show_values(true));
 
             DragValue::new(&mut self.hour)
                 .fixed_decimals(0)
