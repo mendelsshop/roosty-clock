@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ffi::OsStr, path::Path};
 
 use chrono::NaiveTime;
-use eframe::egui::{self, ScrollArea, TextEdit, Widget, Window};
+use eframe::egui::{self, DragValue, ScrollArea, Widget, Window};
 
 use crate::{
     config::{self, get_uid, Alarm, Sound, Sounds},
@@ -80,62 +80,28 @@ impl AlarmBuilder {
     pub(crate) fn render_minute_selector(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.label("Minute");
-            if ui.add(Knob::new(&mut self.minute, 0, 59)).changed() {
-                self.minute_string = self.minute.to_string();
-            }
-            if {
-                TextEdit::singleline(&mut self.minute_string)
-                    .desired_width(20.0)
-                    .char_limit(2)
-                    .ui(&mut *ui)
-            }
-            .lost_focus()
-            {
-                // if the input value is vaild, update the value
-                if let Ok(parsed_value) = self.minute_string.parse::<u8>() {
-                    self.minute = parsed_value.clamp(0, 59);
-                }
-                // sync the input value and the value regardless
-                self.minute_string = self.minute.to_string();
-            }
+            ui.add(Knob::new(&mut self.minute, 0, 59));
+
+            DragValue::new(&mut self.minute)
+                .fixed_decimals(0)
+                .update_while_editing(true)
+                .range(0..=59)
+                .ui(&mut *ui);
         });
     }
 
     pub(crate) fn render_hour_selector(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.label("Hour");
-            if ui.add(Knob::new(&mut self.hour, 1, 12)).changed() {
-                self.hour_string = Self::hour_string(self.hour);
-            }
+            ui.add(Knob::new(&mut self.hour, 1, 12));
 
-            if {
-                TextEdit::singleline(&mut self.hour_string)
-                    .desired_width(20.0)
-                    .char_limit(2)
-                    .ui(&mut *ui)
-            }
-            .lost_focus()
-            {
-                // if the input value is vaild, update the value
-                if let Ok(parsed_value) = self.hour_string.parse::<u8>() {
-                    let clamp = parsed_value.clamp(1, 12);
-                    if clamp == 12 {
-                        self.hour = 0;
-                    } else {
-                        self.hour = clamp;
-                    }
-                    self.hour_string = Self::hour_string(self.hour);
-                }
-            }
+            DragValue::new(&mut self.hour)
+                .fixed_decimals(0)
+                .update_while_editing(true)
+                .range(1..=12)
+                .clamp_existing_to_range(false)
+                .ui(&mut *ui);
         });
-    }
-
-    pub(crate) fn hour_string(hour: u8) -> std::string::String {
-        if hour == 0 {
-            "12".to_string()
-        } else {
-            hour.to_string()
-        }
     }
 
     pub(crate) fn render_sound_editor(&mut self, ui: &mut egui::Ui, sounds: &mut Sounds) {
