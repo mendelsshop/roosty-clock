@@ -186,18 +186,20 @@ impl AlarmBuilder {
     ) -> EditingState {
         let mut ret = EditingState::Editing;
         // if no alarm name set we need way to differentiate between different alarms
-        Window::new(format!("editing alarm {}", self.name)).show(ctx, |ui| {
-            self.edit_alarm(ui, sounds);
-            ui.horizontal(|ui| {
-                if ui.button("done").clicked() {
-                    ret = EditingState::Done(self.clone().build());
-                } else if ui.button("cancel").clicked() {
-                    ret = EditingState::Cancelled;
-                } else {
-                    ret = EditingState::Editing;
-                }
+        Window::new(format!("editing alarm {}", self.name))
+            .collapsible(false)
+            .show(ctx, |ui| {
+                self.edit_alarm(ui, sounds);
+                ui.horizontal(|ui| {
+                    if ui.button("done").clicked() {
+                        ret = EditingState::Done(self.clone().build());
+                    } else if ui.button("cancel").clicked() {
+                        ret = EditingState::Cancelled;
+                    } else {
+                        ret = EditingState::Editing;
+                    }
+                });
             });
-        });
         ret
     }
 }

@@ -69,18 +69,18 @@ impl Clock {
     }
 
     fn render_settings(&mut self, ctx: &egui::Context) {
-        Window::new("settings ⚙").show(ctx, |ui| {
-            if ui.button("x").clicked() {
-                self.in_config = false;
-            }
-            ui.label("Default Sound");
-            AlarmBuilder::render_sound_selector_editor(
-                &mut self.config.sounds.default_sound,
-                ui,
-                &mut self.config.sounds.sounds,
-            );
-            self.config.save(Config::config_path());
-        });
+        Window::new("settings ⚙")
+            .open(&mut self.in_config)
+            .collapsible(false)
+            .show(ctx, |ui| {
+                ui.label("Default Sound");
+                AlarmBuilder::render_sound_selector_editor(
+                    &mut self.config.sounds.default_sound,
+                    ui,
+                    &mut self.config.sounds.sounds,
+                );
+                self.config.save(Config::config_path());
+            });
     }
 
     fn render_header(&mut self, ctx: &egui::Context) {
@@ -162,22 +162,25 @@ impl Clock {
                 alarm.send_stop(&self.sender);
             }
             if alarm.ringing {
-                Window::new("Alarm Triggered").auto_sized().show(ctx, |ui| {
-                    ui.label(format!(
-                        "alarm {} triggered with volume {}",
-                        alarm.id, alarm.volume
-                    ));
-                    if ui.button("stop").clicked() {
-                        ui.close_kind(eframe::egui::UiKind::Window);
-                        alarm.ringing = false;
-                        self.sender
-                            .send(communication::Message::new(
-                                communication::MessageType::AlarmStopped,
-                                alarm.id,
-                            ))
-                            .unwrap();
-                    }
-                });
+                Window::new("Alarm Triggered")
+                    .auto_sized()
+                    .collapsible(false)
+                    .show(ctx, |ui| {
+                        ui.label(format!(
+                            "alarm {} triggered with volume {}",
+                            alarm.id, alarm.volume
+                        ));
+                        if ui.button("stop").clicked() {
+                            ui.close_kind(eframe::egui::UiKind::Window);
+                            alarm.ringing = false;
+                            self.sender
+                                .send(communication::Message::new(
+                                    communication::MessageType::AlarmStopped,
+                                    alarm.id,
+                                ))
+                                .unwrap();
+                        }
+                    });
             }
             let alarm_changed =
                 alarm.render_alarm(&self.config.time_format, ui, ctx, &mut self.config.sounds);
