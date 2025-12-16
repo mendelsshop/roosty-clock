@@ -46,9 +46,8 @@ where
         let (rect, mut responce) =
             ui.allocate_exact_size(Vec2::splat(40.), Sense::click_and_drag());
         // how many different values there are
-        let parts = max - min + N::from_f64(1f64);
         // the angle (degrees) for each part
-        let part_angle = 360. / f32::from(parts);
+        let part_angle = 360. / (f32::from(max - min) + 1.);
         if responce.dragged() || responce.clicked() {
             if let Some(new_value) = responce.interact_pointer_pos() {
                 // inverse of the math for drawing the point (see below) from a value
@@ -56,7 +55,7 @@ where
                 let angle = ((new_value - rect.center()).angle().to_degrees() + 90.)
                     .rem_euclid(360.)
                     / part_angle;
-                *value = N::from_f64(f64::from(angle.floor()));
+                *value = N::from_f64(f64::from(angle.floor())) + min;
 
                 responce.mark_changed();
             }
