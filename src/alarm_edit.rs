@@ -1,11 +1,11 @@
-use std::{collections::HashMap, ffi::OsStr, path::Path};
+use std::{collections::HashMap, ffi::OsStr, iter, path::Path};
 
 use chrono::NaiveTime;
 use eframe::egui::{self, DragValue, ScrollArea, Widget, Window};
 
 use crate::{
     config::{self, get_uid, Alarm, Sound, Sounds},
-    widgets::Knob,
+    widgets::{Knob, Value},
     AlarmBuilder, TimeOfDay,
 };
 
@@ -80,7 +80,13 @@ impl AlarmBuilder {
     pub(crate) fn render_minute_selector(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.label("Minute");
-            ui.add(Knob::new(&mut self.minute, 0, 59));
+            ui.add(Knob::new(
+                &mut self.minute,
+                (0..60).map(|i| Value {
+                    value: i,
+                    show: i % 5 == 0,
+                }),
+            ));
 
             DragValue::new(&mut self.minute)
                 .fixed_decimals(0)
@@ -93,7 +99,13 @@ impl AlarmBuilder {
     pub(crate) fn render_hour_selector(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.label("Hour");
-            ui.add(Knob::new(&mut self.hour, 1, 12).show_values(true));
+            ui.add(Knob::new(
+                &mut self.hour,
+                iter::chain(iter::once(12), 1..=11).map(|i| Value {
+                    value: i,
+                    show: true,
+                }),
+            ));
 
             DragValue::new(&mut self.hour)
                 .fixed_decimals(0)

@@ -1,39 +1,31 @@
-use std::{
-    iter,
-    ops::{Add, Sub},
-};
+use eframe::egui::{Align2, Color32, Sense, Stroke, TextStyle, Vec2, Widget};
 
-use eframe::egui::{emath::Numeric, Align2, Color32, Sense, Stroke, TextStyle, Vec2, Widget};
-
-pub struct Knob<'a, N> {
-    min: N,
-    max: N,
+pub struct Value<N> {
+    pub value: N,
+    pub show: bool,
+}
+pub struct Knob<'a, N, I> {
     value: &'a mut N,
     hand_color: Option<Color32>,
     fill: Option<Color32>,
     stroke: Option<Stroke>,
     radius: Option<f32>,
-    show_values: bool,
+    values: I,
+    index: usize,
 }
+// TODO: (custom) index trait instead of sticking to iterator
 
-impl<'a, N> Knob<'a, N> {
-    pub const fn new(value: &'a mut N, min: N, max: N) -> Self {
+impl<'a, N: std::cmp::PartialEq, I: Iterator<Item = Value<N>> + Clone> Knob<'a, N, I> {
+    pub fn new(value: &'a mut N, values: I) -> Self {
         Self {
-            min,
-            max,
+            index: values.clone().position(|n| n.value == *value).unwrap(),
             value,
             hand_color: None,
             fill: None,
             stroke: None,
             radius: None,
-            show_values: false,
+            values,
         }
-    }
-
-    /// Show the values around the knob
-    pub const fn show_values(mut self, show_values: bool) -> Self {
-        self.show_values = show_values;
-        self
     }
 
     /// Set how big the knob should be relative to its radius
@@ -60,24 +52,23 @@ impl<'a, N> Knob<'a, N> {
         self
     }
 }
-impl<N> Widget for Knob<'_, N>
+impl<N, I> Widget for Knob<'_, N, I>
 where
-    N: Sub<Output = N> + Add<Output = N> + Numeric + ToString,
-    f32: From<N>,
+    N: ToString,
+    I: Iterator<Item = Value<N>> + Clone,
 {
     // TODO: maybe parameterize step, its bit complicated
 
     // partially from https://github.com/obsqrbtz/egui_knob and https://codeberg.org/pintariching/egui_timepicker
     fn ui(self, ui: &mut eframe::egui::Ui) -> eframe::egui::Response {
         let Self {
-            min,
-            max,
             value,
             hand_color,
             fill,
             stroke,
             radius,
-            show_values,
+            values,
+            mut index,
         } = self;
 
         let desired_radius = radius.unwrap_or_else(|| ui.spacing().slider_width / 2.);
@@ -85,15 +76,17 @@ where
             ui.allocate_exact_size(Vec2::splat(desired_radius * 2.), Sense::click_and_drag());
         // how many different values there are
         // the angle (degrees) for each part
-        let part_angle = 360. / (f32::from(max - min) + 1.);
+        let part_angle = 360. / (values.clone().count() as f32);
         if responce.dragged() || responce.clicked() {
             if let Some(new_value) = responce.interact_pointer_pos() {
-                // inverse of the math for drawing the point (see below) from a value
-                // since we are converting the point into a value
+                // inverse of the math for drawing the point (see below) from the (index of a) value
+                // since we are converting the point into (the index of a) value
                 let angle = ((new_value - rect.center()).angle().to_degrees() + 90.)
                     .rem_euclid(360.)
                     / part_angle;
-                *value = N::from_f64(f64::from(angle.floor())) + min;
+                let n = angle.floor() as usize;
+                index = n;
+                *value = values.clone().nth(n).unwrap().value;
 
                 responce.mark_changed();
             }
@@ -104,21 +97,19 @@ where
             desired_radius,
             fill.unwrap_or(visuals.bg_fill),
         );
-        let step = N::from_f64(1f64);
         let border_stroke = stroke.unwrap_or(visuals.fg_stroke);
-        if show_values {
-            for i in iter::successors(Some(min), |n| {
-                let succ = *n + step;
-                (succ <= max).then_some(succ)
-            }) {
-                let angle = (part_angle * f32::from(i)) - 90.;
+        if true {
+            for (i, Value { value, show: _ }) in
+                values.enumerate().filter(|(_, Value { show, .. })| *show)
+            {
+                let angle = (part_angle * i as f32) - 90.;
                 let pointer = rect.center()
                     + Vec2::angled(angle.to_radians())
                         * (desired_radius - ui.style().spacing.icon_width_inner);
                 ui.painter().text(
                     pointer,
                     Align2::CENTER_CENTER,
-                    i.to_string(),
+                    value.to_string(),
                     TextStyle::Monospace.resolve(ui.style()),
                     ui.style().visuals.text_color(),
                 );
@@ -126,10 +117,10 @@ where
         }
         ui.painter()
             .circle_stroke(rect.center(), desired_radius, border_stroke);
-        // the angle of the current value
+        // the angle of (the index of) the current value
         // how many rotations of the of the part angle
         // we subtract 90 at the end to get the first value to be at the top
-        let angle = (part_angle * f32::from(*value)) - 90.;
+        let angle = (part_angle * index as f32) - 90.;
         let pointer = rect.center() + Vec2::angled(angle.to_radians()) * desired_radius;
         let mut hand_stroke = visuals.fg_stroke;
         if let Some(color) = hand_color {
