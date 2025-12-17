@@ -1,10 +1,10 @@
 use std::{collections::HashMap, ffi::OsStr, iter, path::Path};
 
 use chrono::NaiveTime;
-use eframe::egui::{self, DragValue, ScrollArea, Widget, Window};
+use eframe::egui::{self, DragValue, Id, ScrollArea, Widget, Window};
 
 use crate::{
-    config::{self, get_uid, Alarm, Sound, Sounds},
+    config::{self, Alarm, Sound, Sounds},
     widgets::{Knob, Value},
     AlarmBuilder, TimeOfDay,
 };
@@ -38,7 +38,7 @@ impl AlarmBuilder {
             editing: None,
             rang_today: false,
             ringing: false,
-            id: get_uid(),
+            id: self.id,
         }
     }
 
@@ -199,6 +199,7 @@ impl AlarmBuilder {
         let mut ret = EditingState::Editing;
         // if no alarm name set we need way to differentiate between different alarms
         Window::new(format!("editing alarm {}", self.name))
+            .id(Id::new(self.id))
             .collapsible(false)
             .show(ctx, |ui| {
                 self.edit_alarm(ui, sounds);

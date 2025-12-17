@@ -171,6 +171,7 @@ impl From<Alarm> for AlarmBuilder {
             time_of_day: if ampm { TimeOfDay::PM } else { TimeOfDay::AM },
             sound: alarm.sound,
             volume: alarm.volume,
+            id: alarm.id,
         }
     }
 }

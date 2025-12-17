@@ -11,6 +11,8 @@ use eframe::egui::{
     self, Button, CentralPanel, Context, Grid, Layout, ScrollArea, TopBottomPanel, Window,
 };
 
+use crate::config::get_uid;
+
 pub mod config;
 
 /// implementation of alarm editing for egui
@@ -39,6 +41,7 @@ pub struct AlarmBuilder {
     time_of_day: TimeOfDay,
     sound: String,
     volume: f32,
+    id: usize,
 }
 
 impl Default for AlarmBuilder {
@@ -53,6 +56,7 @@ impl Default for AlarmBuilder {
             time_of_day: if ampm { TimeOfDay::PM } else { TimeOfDay::AM },
             sound: Sound::get_default_name(),
             volume: 100.0,
+            id: get_uid(),
         }
     }
 }
