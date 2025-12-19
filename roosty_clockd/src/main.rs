@@ -1,3 +1,10 @@
+#![warn(clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![deny(
+    clippy::use_self,
+    rust_2018_idioms,
+    missing_debug_implementations,
+    clippy::missing_panics_doc
+)]
 use chrono::NaiveTime;
 use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Stream, prelude::*};
 use serde::{Deserialize, Serialize};
@@ -97,7 +104,7 @@ fn main() -> std::io::Result<()> {
 
     let (s, r) = crossbeam_channel::unbounded();
     for conn in listener.incoming().filter_map(handle_error) {
-        let (s, r) = (s.clone(), r.clone());
+        let (s, _r) = (s.clone(), r.clone());
         thread::spawn(move || {
             let (read, mut write) = conn.split();
             let mut buffer = Vec::new();
@@ -114,11 +121,11 @@ fn main() -> std::io::Result<()> {
             let message: ClientMessage = toml::from_slice(&buffer).unwrap();
             match message {
                 ClientMessage::GetAlarms => todo!(),
-                ClientMessage::SetAlarm(_, alarm_edit) => todo!(),
-                ClientMessage::AddAlarm(alarm) => todo!(),
+                ClientMessage::SetAlarm(_, _alarm_edit) => todo!(),
+                ClientMessage::AddAlarm(_alarm) => todo!(),
                 ClientMessage::RemoveAlarm(_) => todo!(),
                 ClientMessage::GetSounds(_) => todo!(),
-                ClientMessage::AdddSound(sound) => todo!(),
+                ClientMessage::AdddSound(_sound) => todo!(),
                 ClientMessage::RemoveSound(_) => todo!(),
                 ClientMessage::StopAlarm(i) => s.send(Alert::AlarmStopped(i)),
             };
