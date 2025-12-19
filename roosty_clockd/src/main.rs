@@ -12,6 +12,208 @@ use std::io::{self, BufReader, prelude::*};
 use std::path::PathBuf;
 use std::thread;
 
+pub mod config {
+    use core::fmt;
+    use std::{collections::HashMap, path::PathBuf};
+
+    use chrono::NaiveTime;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Serialize, Deserialize, Clone)]
+    pub struct Config {
+        pub(crate) time_format: String,
+        pub(crate) alarms: Vec<Alarm>,
+        #[serde(flatten)]
+        pub(crate) sounds: Sounds,
+    }
+    #[derive(Debug, Serialize, Deserialize, Clone)]
+    pub struct Sounds {
+        pub(crate) sounds: HashMap<String, Sound>,
+        pub(crate) default_sound: String,
+    }
+
+    impl Default for Config {
+        fn default() -> Self {
+            Self {
+                time_format: "%l:%M %p".to_string(),
+                alarms: vec![],
+                // Ring,
+                // BingBong,
+                // TickTock,
+                // Rain,
+                sounds: Sounds {
+                    sounds: vec![
+                        ("ring".to_string(), Sound::ring()),
+                        ("bing bong".to_string(), Sound::bing_bong()),
+                        ("tick tock".to_string(), Sound::tick_tock()),
+                        ("beep beep".to_string(), Sound::beep_beep()),
+                        ("rain".to_string(), Sound::rain()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    default_sound: "beep beep".to_string(),
+                },
+            }
+        }
+    }
+
+    impl Config {
+        #[must_use]
+        pub fn new() -> Self {
+            Self::default()
+        }
+
+        #[must_use]
+        pub fn load(path: PathBuf) -> Self {
+            let config = std::fs::read_to_string(path).expect("couldn't read config file");
+            toml::from_str(&config).expect("couldn't parse config file")
+        }
+
+        pub fn save(&self, path: PathBuf) {
+            let config = toml::to_string(self).expect("couldn't serialize config");
+            std::fs::create_dir_all(path.parent().unwrap()).expect("couldn't create config dir");
+            std::fs::write(path, config).expect("couldn't write config file");
+        }
+
+        #[must_use]
+        pub fn config_path() -> PathBuf {
+            let mut path = directories::ProjectDirs::from("", "", "roosty_clock")
+                .expect("couldn't get config path")
+                .config_dir()
+                .to_path_buf();
+            path.push("config.toml");
+            path
+        }
+
+        #[must_use]
+        pub fn sounds_path() -> PathBuf {
+            let mut path = directories::ProjectDirs::from("", "", "roosty_clock")
+                .expect("couldn't get sounds directory path")
+                .data_dir()
+                .to_path_buf();
+            path.push("sounds");
+            path
+        }
+
+        #[must_use]
+        pub fn is_config_present() -> bool {
+            Self::config_path().exists()
+        }
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn always_true() -> bool {
+        true
+    }
+
+    static mut UID: usize = 0;
+    pub fn get_uid() -> usize {
+        // SAFETY: this is only called when we are creating a new alarm which only happens in the main thread
+        unsafe {
+            UID += 1;
+            UID
+        }
+    }
+
+    #[derive(Debug, Serialize, Deserialize, Clone)]
+    pub struct Alarm {
+        pub name: Option<String>,
+        #[serde(with = "toml_datetime_compat")]
+        pub time: NaiveTime,
+        pub volume: f32,
+        #[serde(default = "Sound::get_default_name")]
+        pub sound: String,
+        #[serde(default = "always_true")]
+        pub enabled: bool,
+        #[serde(skip)]
+        pub rang_today: bool,
+        #[serde(skip)]
+        pub ringing: bool,
+        #[serde(skip, default = "get_uid")]
+        pub id: usize,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, Clone)]
+    pub struct Sound {
+        pub name: String,
+        pub path: PathBuf,
+    }
+
+    impl fmt::Display for Sound {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(
+                f,
+                "{}:{}",
+                self.name,
+                self.path.file_name().unwrap().to_string_lossy()
+            )
+        }
+    }
+
+    impl Default for Sound {
+        fn default() -> Self {
+            Self::beep_beep()
+        }
+    }
+
+    impl Sound {
+        #[must_use]
+        pub fn get_default_name() -> String {
+            Self::default().name
+        }
+
+        #[must_use]
+        pub const fn new(name: String, path: PathBuf) -> Self {
+            Self { name, path }
+        }
+
+        #[must_use]
+        pub fn ring() -> Self {
+            Self {
+                name: "ring".to_string(),
+                path: Config::sounds_path().join("ring.mp3"),
+            }
+        }
+
+        #[must_use]
+        pub fn bing_bong() -> Self {
+            Self {
+                name: "bing bong".to_string(),
+                path: Config::sounds_path().join("bing_bong.mp3"),
+            }
+        }
+
+        #[must_use]
+        pub fn tick_tock() -> Self {
+            Self {
+                name: "tick tock".to_string(),
+                path: Config::sounds_path().join("tick_tock.mp3"),
+            }
+        }
+
+        #[must_use]
+        pub fn beep_beep() -> Self {
+            Self {
+                name: "beep beep".to_string(),
+                path: Config::sounds_path().join("beep_beep.mp3"),
+            }
+        }
+
+        #[must_use]
+        pub fn rain() -> Self {
+            Self {
+                name: "rain".to_string(),
+                path: Config::sounds_path().join("rain.mp3"),
+            }
+        }
+
+        #[must_use]
+        pub fn name(&self) -> &str {
+            self.name.as_ref()
+        }
+    }
+}
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Alarm {
     pub name: Option<String>,
@@ -44,6 +246,7 @@ enum ClientMessage {
     AdddSound(Sound),
     RemoveSound(u64),
     StopAlarm(u64),
+    GetNewUID,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -57,6 +260,7 @@ pub enum ServerMessage {
     SoundRemoved(u64),
     AlarmRinging(u64),
     AlarmStopped(u64),
+    UID(u64),
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Alert {
@@ -81,6 +285,7 @@ fn main() -> std::io::Result<()> {
         }
     }
 
+    let mut config = config::Config::load(config::Config::config_path());
     // Pick a name.
     let printname = "roosty-clockd.sock";
     let name = printname.to_ns_name::<GenericNamespaced>()?;
@@ -117,18 +322,21 @@ fn main() -> std::io::Result<()> {
             // send a response. Otherwise, because receiving from and sending to a connection cannot
             // be simultaneous without threads or async, we can deadlock the two processes by having
             // both sides wait for the send buffer to be emptied by the other.
-            conn.read_to_end(&mut buffer).unwrap();
-            let message: ClientMessage = toml::from_slice(&buffer).unwrap();
-            match message {
-                ClientMessage::GetAlarms => todo!(),
-                ClientMessage::SetAlarm(_, _alarm_edit) => todo!(),
-                ClientMessage::AddAlarm(_alarm) => todo!(),
-                ClientMessage::RemoveAlarm(_) => todo!(),
-                ClientMessage::GetSounds(_) => todo!(),
-                ClientMessage::AdddSound(_sound) => todo!(),
-                ClientMessage::RemoveSound(_) => todo!(),
-                ClientMessage::StopAlarm(i) => s.send(Alert::AlarmStopped(i)),
-            };
+            if conn.read_to_end(&mut buffer).is_ok()
+                && let Ok(message) = toml::from_slice(&buffer)
+            {
+                match message {
+                    ClientMessage::GetNewUID => todo!(),
+                    ClientMessage::GetAlarms => todo!(),
+                    ClientMessage::SetAlarm(_, _alarm_edit) => todo!(),
+                    ClientMessage::AddAlarm(_alarm) => todo!(),
+                    ClientMessage::RemoveAlarm(_) => todo!(),
+                    ClientMessage::GetSounds(_) => todo!(),
+                    ClientMessage::AdddSound(_sound) => todo!(),
+                    ClientMessage::RemoveSound(_) => todo!(),
+                    ClientMessage::StopAlarm(i) => s.send(Alert::AlarmStopped(i)),
+                };
+            }
 
             // Now that the receive has come through and the client is waiting on the server's send, do
             // it. (`.get_mut()` is to get the sender, `BufReader` doesn't implement a pass-through
@@ -141,6 +349,30 @@ fn main() -> std::io::Result<()> {
             // stacking on top of one another.
             buffer.clear();
         });
+    }
+    loop {
+        if let Ok(m) = r.recv() {
+            match m {
+                Alert::AlarmSet(_id, _alarm_edit) => {}
+                Alert::AlaramAdded(alarm) => {
+                    config.alarms.push(config::Alarm {
+                        name: alarm.name,
+                        time: alarm.time,
+                        volume: alarm.volume,
+                        sound: todo!(),
+                        enabled: true,
+                        rang_today: false,
+                        ringing: false,
+                        id: config::get_uid(),
+                    });
+                }
+                Alert::AlarmRemoved(_) => todo!(),
+                Alert::SoundAdded(_sound) => todo!(),
+                Alert::SoundRemoved(_) => todo!(),
+                Alert::AlarmRinging(_) => todo!(),
+                Alert::AlarmStopped(_) => todo!(),
+            }
+        }
     }
     Ok(())
 }
