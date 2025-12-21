@@ -12,45 +12,116 @@ use std::io::{self, BufReader, prelude::*};
 use std::path::PathBuf;
 use std::thread;
 
+use crate::config::get_uid;
+
 pub mod config {
     use core::fmt;
-    use std::{collections::HashMap, path::PathBuf};
+    use std::{collections::HashMap, hash::Hash, path::PathBuf};
 
     use chrono::NaiveTime;
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Serialize, Deserialize, Clone)]
+    // idea is to have ids be non persistant so users do not have to worry about manually enteriing
+    // ids, but maybe better idea is:
+    // alarms use ids
+    // sounds are by name. (as sounds are referenced so they need to have a presistant way to
+    // refrence them)
     pub struct Config {
-        pub(crate) time_format: String,
-        pub(crate) alarms: Vec<Alarm>,
-        #[serde(flatten)]
+        pub(crate) alarms: Collection<u64, Alarm>,
         pub(crate) sounds: Sounds,
+    }
+    pub trait GetId<T> {
+        fn get_id(&self) -> &T;
+    }
+
+    /// Serializable collection
+    #[derive(Serialize, Deserialize, Clone, Debug)]
+    #[serde(from = "Vec<V>", into = "Vec<V>")]
+    pub struct Collection<K, V>
+    where
+        K: Eq + Hash + Clone,
+        V: GetId<K> + Clone,
+    {
+        data: HashMap<K, V>,
+    }
+
+    impl<K: Default, V> Default for Collection<K, V>
+    where
+        K: Eq + Hash + Clone,
+        V: GetId<K> + Clone,
+    {
+        fn default() -> Self {
+            Self {
+                data: Default::default(),
+            }
+        }
+    }
+
+    impl<K, V> Collection<K, V>
+    where
+        K: Eq + Hash + Clone,
+        V: GetId<K> + Clone,
+    {
+        #[must_use]
+        pub fn new() -> Self {
+            Self {
+                data: HashMap::new(),
+            }
+        }
+
+        pub fn insert(&mut self, item: V) -> Option<V> {
+            let id = item.get_id().to_owned();
+            self.data.insert(id, item)
+        }
+    }
+
+    impl<K, V> From<Vec<V>> for Collection<K, V>
+    where
+        K: Eq + Hash + Clone,
+        V: GetId<K> + Clone,
+    {
+        fn from(value: Vec<V>) -> Self {
+            let mut obj: Self = Self::new();
+            value.into_iter().for_each(|v| {
+                obj.insert(v);
+            });
+            obj
+        }
+    }
+
+    impl<K, V> From<Collection<K, V>> for Vec<V>
+    where
+        K: Eq + Hash + Clone,
+        V: GetId<K> + Clone,
+    {
+        fn from(val: Collection<K, V>) -> Self {
+            Self::from_iter(val.data.into_values())
+        }
     }
     #[derive(Debug, Serialize, Deserialize, Clone)]
     pub struct Sounds {
-        pub(crate) sounds: HashMap<String, Sound>,
+        pub(crate) sounds: Collection<u64, Sound>,
         pub(crate) default_sound: String,
     }
 
     impl Default for Config {
         fn default() -> Self {
+            let mut sounds = Collection::new();
+            sounds.insert(Sound::ring());
+            sounds.insert(Sound::bing_bong());
+            sounds.insert(Sound::tick_tock());
+            sounds.insert(Sound::beep_beep());
+            sounds.insert(Sound::rain());
+
             Self {
-                time_format: "%l:%M %p".to_string(),
-                alarms: vec![],
+                alarms: Collection::default(),
                 // Ring,
                 // BingBong,
                 // TickTock,
                 // Rain,
                 sounds: Sounds {
-                    sounds: vec![
-                        ("ring".to_string(), Sound::ring()),
-                        ("bing bong".to_string(), Sound::bing_bong()),
-                        ("tick tock".to_string(), Sound::tick_tock()),
-                        ("beep beep".to_string(), Sound::beep_beep()),
-                        ("rain".to_string(), Sound::rain()),
-                    ]
-                    .into_iter()
-                    .collect(),
+                    sounds,
                     default_sound: "beep beep".to_string(),
                 },
             }
@@ -107,8 +178,8 @@ pub mod config {
         true
     }
 
-    static mut UID: usize = 0;
-    pub fn get_uid() -> usize {
+    static mut UID: u64 = 0;
+    pub fn get_uid() -> u64 {
         // SAFETY: this is only called when we are creating a new alarm which only happens in the main thread
         unsafe {
             UID += 1;
@@ -116,6 +187,11 @@ pub mod config {
         }
     }
 
+    impl GetId<u64> for Alarm {
+        fn get_id(&self) -> &u64 {
+            &self.id
+        }
+    }
     #[derive(Debug, Serialize, Deserialize, Clone)]
     pub struct Alarm {
         pub name: Option<String>,
@@ -131,15 +207,20 @@ pub mod config {
         #[serde(skip)]
         pub ringing: bool,
         #[serde(skip, default = "get_uid")]
-        pub id: usize,
+        pub id: u64,
     }
 
     #[derive(Debug, Serialize, Deserialize, Clone)]
     pub struct Sound {
         pub name: String,
         pub path: PathBuf,
+        pub id: u64,
     }
-
+    impl GetId<u64> for Sound {
+        fn get_id(&self) -> &u64 {
+            &self.id
+        }
+    }
     impl fmt::Display for Sound {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             write!(
@@ -164,8 +245,12 @@ pub mod config {
         }
 
         #[must_use]
-        pub const fn new(name: String, path: PathBuf) -> Self {
-            Self { name, path }
+        pub fn new(name: String, path: PathBuf) -> Self {
+            Self {
+                name,
+                path,
+                id: get_uid(),
+            }
         }
 
         #[must_use]
@@ -173,6 +258,7 @@ pub mod config {
             Self {
                 name: "ring".to_string(),
                 path: Config::sounds_path().join("ring.mp3"),
+                id: get_uid(),
             }
         }
 
@@ -181,6 +267,7 @@ pub mod config {
             Self {
                 name: "bing bong".to_string(),
                 path: Config::sounds_path().join("bing_bong.mp3"),
+                id: get_uid(),
             }
         }
 
@@ -189,6 +276,7 @@ pub mod config {
             Self {
                 name: "tick tock".to_string(),
                 path: Config::sounds_path().join("tick_tock.mp3"),
+                id: get_uid(),
             }
         }
 
@@ -197,6 +285,7 @@ pub mod config {
             Self {
                 name: "beep beep".to_string(),
                 path: Config::sounds_path().join("beep_beep.mp3"),
+                id: get_uid(),
             }
         }
 
@@ -205,6 +294,7 @@ pub mod config {
             Self {
                 name: "rain".to_string(),
                 path: Config::sounds_path().join("rain.mp3"),
+                id: get_uid(),
             }
         }
 
@@ -221,9 +311,11 @@ pub struct Alarm {
     pub time: NaiveTime,
     pub volume: f32,
     pub sound: u64,
+    pub id: u64,
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Sound {
+    pub id: u64,
     pub name: String,
     pub path: PathBuf,
 }
@@ -326,7 +418,15 @@ fn main() -> std::io::Result<()> {
                 && let Ok(message) = toml::from_slice(&buffer)
             {
                 match message {
-                    ClientMessage::GetNewUID => todo!(),
+                    ClientMessage::GetNewUID => {
+                        write
+                            .write(
+                                toml::to_string(&ServerMessage::UID(get_uid()))
+                                    .unwrap()
+                                    .as_bytes(),
+                            )
+                            .unwrap();
+                    }
                     ClientMessage::GetAlarms => todo!(),
                     ClientMessage::SetAlarm(_, _alarm_edit) => todo!(),
                     ClientMessage::AddAlarm(_alarm) => todo!(),
@@ -334,8 +434,8 @@ fn main() -> std::io::Result<()> {
                     ClientMessage::GetSounds(_) => todo!(),
                     ClientMessage::AdddSound(_sound) => todo!(),
                     ClientMessage::RemoveSound(_) => todo!(),
-                    ClientMessage::StopAlarm(i) => s.send(Alert::AlarmStopped(i)),
-                };
+                    ClientMessage::StopAlarm(i) => s.send(Alert::AlarmStopped(i)).unwrap(),
+                }
             }
 
             // Now that the receive has come through and the client is waiting on the server's send, do
@@ -355,7 +455,7 @@ fn main() -> std::io::Result<()> {
             match m {
                 Alert::AlarmSet(_id, _alarm_edit) => {}
                 Alert::AlaramAdded(alarm) => {
-                    config.alarms.push(config::Alarm {
+                    config.alarms.insert(config::Alarm {
                         name: alarm.name,
                         time: alarm.time,
                         volume: alarm.volume,
@@ -363,7 +463,7 @@ fn main() -> std::io::Result<()> {
                         enabled: true,
                         rang_today: false,
                         ringing: false,
-                        id: config::get_uid(),
+                        id: alarm.id,
                     });
                 }
                 Alert::AlarmRemoved(_) => todo!(),
