@@ -330,7 +330,7 @@ pub enum ServerMessage {
     AlarmSet(u64, AlarmEdit),
     AlaramAdded(Alarm),
     AlarmRemoved(u64),
-    Sounds(Vec<config::Sound>),
+    Sounds(HashMap<String, config::Sound>),
     SoundAdded(config::Sound),
     SoundRemoved(u64),
     AlarmRinging(u64),
@@ -463,8 +463,16 @@ fn main() -> std::io::Result<()> {
                         ServerCommandKind::NewUID => {
                             reciever.send(ServerResponce::NewUID(get_uid())).unwrap();
                         }
-                        ServerCommandKind::GetAlarms => todo!(),
-                        ServerCommandKind::GetSounds => todo!(),
+                        ServerCommandKind::GetAlarms => {
+                            reciever
+                                .send(ServerResponce::Alarms(config.alarms.data.clone()))
+                                .unwrap();
+                        }
+                        ServerCommandKind::GetSounds => {
+                            reciever
+                                .send(ServerResponce::Sounds(config.sounds.sounds.clone()))
+                                .unwrap();
+                        }
                     }
                 }
             }
@@ -499,7 +507,14 @@ fn main() -> std::io::Result<()> {
                                 })
                                 .unwrap();
                         }
-                        ClientMessage::GetAlarms => todo!(),
+                        ClientMessage::GetAlarms => {
+                            s_server
+                                .send(ServerCommand {
+                                    kind: ServerCommandKind::GetAlarms,
+                                    reciever: s_client.clone(),
+                                })
+                                .unwrap();
+                        }
                         ClientMessage::SetAlarm(alarm, alarm_edit) => {
                             s.send(Alert::AlarmSet(alarm, alarm_edit)).unwrap();
                         }
@@ -507,7 +522,14 @@ fn main() -> std::io::Result<()> {
                             s.send(Alert::AlaramAdded(alarm)).unwrap();
                         }
                         ClientMessage::RemoveAlarm(id) => s.send(Alert::AlarmRemoved(id)).unwrap(),
-                        ClientMessage::GetSounds => todo!(),
+                        ClientMessage::GetSounds => {
+                            s_server
+                                .send(ServerCommand {
+                                    kind: ServerCommandKind::GetSounds,
+                                    reciever: s_client.clone(),
+                                })
+                                .unwrap();
+                        }
                         ClientMessage::AdddSound(sound) => {
                             s.send(Alert::SoundAdded(sound)).unwrap();
                         }
@@ -524,8 +546,24 @@ fn main() -> std::io::Result<()> {
                             .write(toml::to_string(&ServerMessage::UID(id)).unwrap().as_bytes())
                             .unwrap();
                     }
-                    Some(ServerResponce::Alarms(_alarms)) => {}
-                    Some(ServerResponce::Sounds(_sounds)) => {}
+                    Some(ServerResponce::Alarms(alarms)) => {
+                        write
+                            .write(
+                                toml::to_string(&ServerMessage::Alarms(alarms))
+                                    .unwrap()
+                                    .as_bytes(),
+                            )
+                            .unwrap();
+                    }
+                    Some(ServerResponce::Sounds(_sounds)) => {
+                        write
+                            .write(
+                                toml::to_string(&ServerMessage::Sounds(_sounds))
+                                    .unwrap()
+                                    .as_bytes(),
+                            )
+                            .unwrap();
+                    }
                     None => {}
                 }
 
