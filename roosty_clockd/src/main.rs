@@ -31,6 +31,7 @@ pub mod config {
         pub(crate) alarms: Collection<u64, Alarm>,
         pub(crate) sounds: Sounds,
     }
+    // https://stackoverflow.com/questions/79314434/rust-serde-serialization-to-from-vec-into-hashmap
     pub trait GetId<T> {
         fn get_id(&self) -> &T;
     }
@@ -101,19 +102,12 @@ pub mod config {
     }
     #[derive(Debug, Serialize, Deserialize, Clone)]
     pub struct Sounds {
-        pub(crate) sounds: Collection<u64, Sound>,
+        pub(crate) sounds: HashMap<String, Sound>,
         pub(crate) default_sound: String,
     }
 
     impl Default for Config {
         fn default() -> Self {
-            let mut sounds = Collection::new();
-            sounds.insert(Sound::ring());
-            sounds.insert(Sound::bing_bong());
-            sounds.insert(Sound::tick_tock());
-            sounds.insert(Sound::beep_beep());
-            sounds.insert(Sound::rain());
-
             Self {
                 alarms: Collection::default(),
                 // Ring,
@@ -121,7 +115,15 @@ pub mod config {
                 // TickTock,
                 // Rain,
                 sounds: Sounds {
-                    sounds,
+                    sounds: [
+                        ("ring".to_string(), Sound::ring()),
+                        ("bing bong".to_string(), Sound::bing_bong()),
+                        ("tick tock".to_string(), Sound::tick_tock()),
+                        ("beep beep".to_string(), Sound::beep_beep()),
+                        ("raing".to_string(), Sound::rain()),
+                    ]
+                    .into_iter()
+                    .collect(),
                     default_sound: "beep beep".to_string(),
                 },
             }
@@ -214,12 +216,6 @@ pub mod config {
     pub struct Sound {
         pub name: String,
         pub path: PathBuf,
-        pub id: u64,
-    }
-    impl GetId<u64> for Sound {
-        fn get_id(&self) -> &u64 {
-            &self.id
-        }
     }
     impl fmt::Display for Sound {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -245,12 +241,8 @@ pub mod config {
         }
 
         #[must_use]
-        pub fn new(name: String, path: PathBuf) -> Self {
-            Self {
-                name,
-                path,
-                id: get_uid(),
-            }
+        pub const fn new(name: String, path: PathBuf) -> Self {
+            Self { name, path }
         }
 
         #[must_use]
@@ -258,7 +250,6 @@ pub mod config {
             Self {
                 name: "ring".to_string(),
                 path: Config::sounds_path().join("ring.mp3"),
-                id: get_uid(),
             }
         }
 
@@ -267,7 +258,6 @@ pub mod config {
             Self {
                 name: "bing bong".to_string(),
                 path: Config::sounds_path().join("bing_bong.mp3"),
-                id: get_uid(),
             }
         }
 
@@ -276,7 +266,6 @@ pub mod config {
             Self {
                 name: "tick tock".to_string(),
                 path: Config::sounds_path().join("tick_tock.mp3"),
-                id: get_uid(),
             }
         }
 
@@ -285,7 +274,6 @@ pub mod config {
             Self {
                 name: "beep beep".to_string(),
                 path: Config::sounds_path().join("beep_beep.mp3"),
-                id: get_uid(),
             }
         }
 
@@ -294,7 +282,6 @@ pub mod config {
             Self {
                 name: "rain".to_string(),
                 path: Config::sounds_path().join("rain.mp3"),
-                id: get_uid(),
             }
         }
 
@@ -310,7 +297,7 @@ pub struct Alarm {
     #[serde(with = "toml_datetime_compat")]
     pub time: NaiveTime,
     pub volume: f32,
-    pub sound: u64,
+    pub sound: String,
     pub id: u64,
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -459,7 +446,7 @@ fn main() -> std::io::Result<()> {
                         name: alarm.name,
                         time: alarm.time,
                         volume: alarm.volume,
-                        sound: todo!(),
+                        sound: alarm.sound,
                         enabled: true,
                         rang_today: false,
                         ringing: false,
