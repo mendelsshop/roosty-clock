@@ -8,7 +8,9 @@
 use chrono::NaiveTime;
 use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Stream, prelude::*};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::io::{self, BufReader, prelude::*};
+use std::sync::mpsc;
 use std::thread;
 
 use crate::config::get_uid;
@@ -315,7 +317,7 @@ enum ClientMessage {
     SetAlarm(u64, AlarmEdit),
     AddAlarm(Alarm),
     RemoveAlarm(u64),
-    GetSounds(u64),
+    GetSounds,
     AdddSound(config::Sound),
     RemoveSound(String),
     StopAlarm(u64),
@@ -324,7 +326,7 @@ enum ClientMessage {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ServerMessage {
-    Alarms(Vec<()>),
+    Alarms(HashMap<u64, config::Alarm>),
     AlarmSet(u64, AlarmEdit),
     AlaramAdded(Alarm),
     AlarmRemoved(u64),
@@ -344,6 +346,23 @@ pub enum Alert {
     SoundRemoved(String),
     AlarmRinging(u64),
     AlarmStopped(u64),
+}
+#[allow(missing_debug_implementations)]
+pub struct ServerCommand {
+    kind: ServerCommandKind,
+    reciever: mpsc::Sender<ServerResponce>,
+}
+#[allow(missing_debug_implementations)]
+pub enum ServerResponce {
+    NewUID(u64),
+    Alarms(HashMap<u64, config::Alarm>),
+    Sounds(HashMap<String, config::Sound>),
+}
+#[allow(missing_debug_implementations)]
+pub enum ServerCommandKind {
+    NewUID,
+    GetAlarms,
+    GetSounds,
 }
 fn main() -> std::io::Result<()> {
     // Define a function that checks for errors in incoming connections. We'll use this to filter
@@ -381,8 +400,79 @@ fn main() -> std::io::Result<()> {
     eprintln!("Server running at {printname}");
 
     let (s, r) = crossbeam_channel::unbounded();
+    let (s_server, r_server) = mpsc::channel();
+
+    {
+        let (_s, r) = (s.clone(), r.clone());
+        thread::spawn(move || -> ! {
+            loop {
+                if let Ok(m) = r.recv() {
+                    match m {
+                        Alert::AlarmSet(id, alarm_edit) => {
+                            if let Some(config::Alarm {
+                                name,
+                                time,
+                                volume,
+                                sound,
+                                enabled,
+                                ..
+                            }) = config.alarms.data.get_mut(&id)
+                            {
+                                match alarm_edit {
+                                    AlarmEdit::Time(new_time) => *time = new_time,
+                                    AlarmEdit::Name(new_name) => *name = new_name,
+                                    AlarmEdit::Sound(new_sound) => *sound = new_sound,
+                                    AlarmEdit::Volume(new_volume) => *volume = new_volume,
+                                    AlarmEdit::Enable(new_enabled) => *enabled = new_enabled,
+                                }
+                            }
+                        }
+                        Alert::AlaramAdded(alarm) => {
+                            config.alarms.insert(config::Alarm {
+                                name: alarm.name,
+                                time: alarm.time,
+                                volume: alarm.volume,
+                                sound: alarm.sound,
+                                enabled: true,
+                                rang_today: false,
+                                ringing: false,
+                                id: alarm.id,
+                            });
+                        }
+                        Alert::AlarmRemoved(id) => {
+                            config.alarms.data.remove(&id).unwrap();
+                        }
+                        Alert::SoundAdded(sound) => {
+                            config.sounds.sounds.insert(sound.name.clone(), sound);
+                        }
+                        Alert::SoundRemoved(sound) => {
+                            config.sounds.sounds.remove(&sound).unwrap();
+                        }
+                        Alert::AlarmRinging(_) => {}
+                        Alert::AlarmStopped(id) => {
+                            if let Some(config::Alarm { ringing, .. }) =
+                                config.alarms.data.get_mut(&id)
+                            {
+                                *ringing = false;
+                            }
+                        }
+                    }
+                }
+                if let Ok(ServerCommand { kind, reciever }) = r_server.recv() {
+                    match kind {
+                        ServerCommandKind::NewUID => {
+                            reciever.send(ServerResponce::NewUID(get_uid())).unwrap();
+                        }
+                        ServerCommandKind::GetAlarms => todo!(),
+                        ServerCommandKind::GetSounds => todo!(),
+                    }
+                }
+            }
+        });
+    }
     for conn in listener.incoming().filter_map(handle_error) {
         let (s, _r) = (s.clone(), r.clone());
+        let s_server = s_server.clone();
         thread::spawn(move || {
             let (read, mut write) = conn.split();
             let mut buffer = Vec::new();
@@ -391,102 +481,66 @@ fn main() -> std::io::Result<()> {
             let mut conn = BufReader::new(read);
             println!("Incoming connection!");
 
+            let (s_client, r_client) = mpsc::channel();
             // Since our client example sends first, the server should receive a line and only then
             // send a response. Otherwise, because receiving from and sending to a connection cannot
             // be simultaneous without threads or async, we can deadlock the two processes by having
             // both sides wait for the send buffer to be emptied by the other.
-            if conn.read_to_end(&mut buffer).is_ok()
-                && let Ok(message) = toml::from_slice(&buffer)
-            {
-                match message {
-                    ClientMessage::GetNewUID => {
+            loop {
+                if conn.read_to_end(&mut buffer).is_ok()
+                    && let Ok(message) = toml::from_slice(&buffer)
+                {
+                    match message {
+                        ClientMessage::GetNewUID => {
+                            s_server
+                                .send(ServerCommand {
+                                    kind: ServerCommandKind::NewUID,
+                                    reciever: s_client.clone(),
+                                })
+                                .unwrap();
+                        }
+                        ClientMessage::GetAlarms => todo!(),
+                        ClientMessage::SetAlarm(alarm, alarm_edit) => {
+                            s.send(Alert::AlarmSet(alarm, alarm_edit)).unwrap();
+                        }
+                        ClientMessage::AddAlarm(alarm) => {
+                            s.send(Alert::AlaramAdded(alarm)).unwrap();
+                        }
+                        ClientMessage::RemoveAlarm(id) => s.send(Alert::AlarmRemoved(id)).unwrap(),
+                        ClientMessage::GetSounds => todo!(),
+                        ClientMessage::AdddSound(sound) => {
+                            s.send(Alert::SoundAdded(sound)).unwrap();
+                        }
+
+                        ClientMessage::RemoveSound(sound) => {
+                            s.send(Alert::SoundRemoved(sound)).unwrap();
+                        }
+                        ClientMessage::StopAlarm(i) => s.send(Alert::AlarmStopped(i)).unwrap(),
+                    }
+                }
+                match r_client.recv().ok() {
+                    Some(ServerResponce::NewUID(id)) => {
                         write
-                            .write(
-                                toml::to_string(&ServerMessage::UID(get_uid()))
-                                    .unwrap()
-                                    .as_bytes(),
-                            )
+                            .write(toml::to_string(&ServerMessage::UID(id)).unwrap().as_bytes())
                             .unwrap();
                     }
-                    ClientMessage::GetAlarms => todo!(),
-                    ClientMessage::SetAlarm(alarm, alarm_edit) => {
-                        s.send(Alert::AlarmSet(alarm, alarm_edit)).unwrap();
-                    }
-                    ClientMessage::AddAlarm(alarm) => s.send(Alert::AlaramAdded(alarm)).unwrap(),
-                    ClientMessage::RemoveAlarm(id) => s.send(Alert::AlarmRemoved(id)).unwrap(),
-                    ClientMessage::GetSounds(_) => todo!(),
-                    ClientMessage::AdddSound(sound) => s.send(Alert::SoundAdded(sound)).unwrap(),
-
-                    ClientMessage::RemoveSound(sound) => {
-                        s.send(Alert::SoundRemoved(sound)).unwrap();
-                    }
-                    ClientMessage::StopAlarm(i) => s.send(Alert::AlarmStopped(i)).unwrap(),
+                    Some(ServerResponce::Alarms(_alarms)) => {}
+                    Some(ServerResponce::Sounds(_sounds)) => {}
+                    None => {}
                 }
+
+                // Now that the receive has come through and the client is waiting on the server's send, do
+                // it. (`.get_mut()` is to get the sender, `BufReader` doesn't implement a pass-through
+                // `Write`.)
+
+                // Print out the result, getting the newline for free!
+
+                // Clear the buffer so that the next iteration will display new data instead of messages
+                // stacking on top of one another.
+                buffer.clear();
             }
-
-            // Now that the receive has come through and the client is waiting on the server's send, do
-            // it. (`.get_mut()` is to get the sender, `BufReader` doesn't implement a pass-through
-            // `Write`.)
-            write.write_all(b"Hello from server!\n").unwrap();
-
-            // Print out the result, getting the newline for free!
-
-            // Clear the buffer so that the next iteration will display new data instead of messages
-            // stacking on top of one another.
-            buffer.clear();
         });
     }
-    loop {
-        if let Ok(m) = r.recv() {
-            match m {
-                Alert::AlarmSet(id, alarm_edit) => {
-                    if let Some(config::Alarm {
-                        name,
-                        time,
-                        volume,
-                        sound,
-                        enabled,
-                        ..
-                    }) = config.alarms.data.get_mut(&id)
-                    {
-                        match alarm_edit {
-                            AlarmEdit::Time(new_time) => *time = new_time,
-                            AlarmEdit::Name(new_name) => *name = new_name,
-                            AlarmEdit::Sound(new_sound) => *sound = new_sound,
-                            AlarmEdit::Volume(new_volume) => *volume = new_volume,
-                            AlarmEdit::Enable(new_enabled) => *enabled = new_enabled,
-                        }
-                    }
-                }
-                Alert::AlaramAdded(alarm) => {
-                    config.alarms.insert(config::Alarm {
-                        name: alarm.name,
-                        time: alarm.time,
-                        volume: alarm.volume,
-                        sound: alarm.sound,
-                        enabled: true,
-                        rang_today: false,
-                        ringing: false,
-                        id: alarm.id,
-                    });
-                }
-                Alert::AlarmRemoved(id) => {
-                    config.alarms.data.remove(&id).unwrap();
-                }
-                Alert::SoundAdded(sound) => {
-                    config.sounds.sounds.insert(sound.name.clone(), sound);
-                }
-                Alert::SoundRemoved(sound) => {
-                    config.sounds.sounds.remove(&sound).unwrap();
-                }
-                Alert::AlarmRinging(_) => {}
-                Alert::AlarmStopped(id) => {
-                    if let Some(config::Alarm { ringing, .. }) = config.alarms.data.get_mut(&id) {
-                        *ringing = false;
-                    }
-                }
-            }
-        }
-    }
+
     Ok(())
 }
