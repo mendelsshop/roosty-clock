@@ -9,7 +9,6 @@ use chrono::NaiveTime;
 use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Stream, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::io::{self, BufReader, prelude::*};
-use std::path::PathBuf;
 use std::thread;
 
 use crate::config::get_uid;
@@ -44,7 +43,7 @@ pub mod config {
         K: Eq + Hash + Clone,
         V: GetId<K> + Clone,
     {
-        data: HashMap<K, V>,
+        pub data: HashMap<K, V>,
     }
 
     impl<K: Default, V> Default for Collection<K, V>
@@ -300,19 +299,14 @@ pub struct Alarm {
     pub sound: String,
     pub id: u64,
 }
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Sound {
-    pub id: u64,
-    pub name: String,
-    pub path: PathBuf,
-}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum AlarmEdit {
     #[serde(with = "toml_datetime_compat")]
     Time(NaiveTime),
     Name(Option<String>),
-    Sound(u64),
-    Volume(f64),
+    Sound(String),
+    Volume(f32),
     Enable(bool),
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -322,8 +316,8 @@ enum ClientMessage {
     AddAlarm(Alarm),
     RemoveAlarm(u64),
     GetSounds(u64),
-    AdddSound(Sound),
-    RemoveSound(u64),
+    AdddSound(config::Sound),
+    RemoveSound(String),
     StopAlarm(u64),
     GetNewUID,
 }
@@ -334,8 +328,8 @@ pub enum ServerMessage {
     AlarmSet(u64, AlarmEdit),
     AlaramAdded(Alarm),
     AlarmRemoved(u64),
-    Sounds(Vec<Sound>),
-    SoundAdded(Sound),
+    Sounds(Vec<config::Sound>),
+    SoundAdded(config::Sound),
     SoundRemoved(u64),
     AlarmRinging(u64),
     AlarmStopped(u64),
@@ -346,8 +340,8 @@ pub enum Alert {
     AlarmSet(u64, AlarmEdit),
     AlaramAdded(Alarm),
     AlarmRemoved(u64),
-    SoundAdded(Sound),
-    SoundRemoved(u64),
+    SoundAdded(config::Sound),
+    SoundRemoved(String),
     AlarmRinging(u64),
     AlarmStopped(u64),
 }
@@ -415,12 +409,17 @@ fn main() -> std::io::Result<()> {
                             .unwrap();
                     }
                     ClientMessage::GetAlarms => todo!(),
-                    ClientMessage::SetAlarm(_, _alarm_edit) => todo!(),
-                    ClientMessage::AddAlarm(_alarm) => todo!(),
-                    ClientMessage::RemoveAlarm(_) => todo!(),
+                    ClientMessage::SetAlarm(alarm, alarm_edit) => {
+                        s.send(Alert::AlarmSet(alarm, alarm_edit)).unwrap();
+                    }
+                    ClientMessage::AddAlarm(alarm) => s.send(Alert::AlaramAdded(alarm)).unwrap(),
+                    ClientMessage::RemoveAlarm(id) => s.send(Alert::AlarmRemoved(id)).unwrap(),
                     ClientMessage::GetSounds(_) => todo!(),
-                    ClientMessage::AdddSound(_sound) => todo!(),
-                    ClientMessage::RemoveSound(_) => todo!(),
+                    ClientMessage::AdddSound(sound) => s.send(Alert::SoundAdded(sound)).unwrap(),
+
+                    ClientMessage::RemoveSound(sound) => {
+                        s.send(Alert::SoundRemoved(sound)).unwrap();
+                    }
                     ClientMessage::StopAlarm(i) => s.send(Alert::AlarmStopped(i)).unwrap(),
                 }
             }
@@ -440,7 +439,25 @@ fn main() -> std::io::Result<()> {
     loop {
         if let Ok(m) = r.recv() {
             match m {
-                Alert::AlarmSet(_id, _alarm_edit) => {}
+                Alert::AlarmSet(id, alarm_edit) => {
+                    if let Some(config::Alarm {
+                        name,
+                        time,
+                        volume,
+                        sound,
+                        enabled,
+                        ..
+                    }) = config.alarms.data.get_mut(&id)
+                    {
+                        match alarm_edit {
+                            AlarmEdit::Time(new_time) => *time = new_time,
+                            AlarmEdit::Name(new_name) => *name = new_name,
+                            AlarmEdit::Sound(new_sound) => *sound = new_sound,
+                            AlarmEdit::Volume(new_volume) => *volume = new_volume,
+                            AlarmEdit::Enable(new_enabled) => *enabled = new_enabled,
+                        }
+                    }
+                }
                 Alert::AlaramAdded(alarm) => {
                     config.alarms.insert(config::Alarm {
                         name: alarm.name,
@@ -453,11 +470,21 @@ fn main() -> std::io::Result<()> {
                         id: alarm.id,
                     });
                 }
-                Alert::AlarmRemoved(_) => todo!(),
-                Alert::SoundAdded(_sound) => todo!(),
-                Alert::SoundRemoved(_) => todo!(),
-                Alert::AlarmRinging(_) => todo!(),
-                Alert::AlarmStopped(_) => todo!(),
+                Alert::AlarmRemoved(id) => {
+                    config.alarms.data.remove(&id).unwrap();
+                }
+                Alert::SoundAdded(sound) => {
+                    config.sounds.sounds.insert(sound.name.clone(), sound);
+                }
+                Alert::SoundRemoved(sound) => {
+                    config.sounds.sounds.remove(&sound).unwrap();
+                }
+                Alert::AlarmRinging(_) => {}
+                Alert::AlarmStopped(id) => {
+                    if let Some(config::Alarm { ringing, .. }) = config.alarms.data.get_mut(&id) {
+                        *ringing = false;
+                    }
+                }
             }
         }
     }
