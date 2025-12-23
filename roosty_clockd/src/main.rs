@@ -5,7 +5,7 @@
     missing_debug_implementations,
     clippy::missing_panics_doc
 )]
-use chrono::{DateTime, NaiveTime};
+use chrono::{DateTime, Days, NaiveTime};
 use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Stream, prelude::*};
 use rodio::{Sink, Source, decoder};
 use serde::{Deserialize, Serialize};
@@ -32,6 +32,7 @@ pub mod config {
     // refrence them)
     pub struct Config {
         pub(crate) alarms: Collection<u64, Alarm>,
+        #[serde(flatten)]
         pub(crate) sounds: Sounds,
     }
     // https://stackoverflow.com/questions/79314434/rust-serde-serialization-to-from-vec-into-hashmap
@@ -209,8 +210,6 @@ pub mod config {
         pub enabled: bool,
         #[serde(skip)]
         pub rang_today: bool,
-        #[serde(skip)]
-        pub ringing: bool,
         #[serde(skip, default = "get_uid")]
         pub id: u64,
     }
@@ -413,7 +412,7 @@ fn main() -> std::io::Result<()> {
             )
         }));
     {
-        let (_s, r) = (s.clone(), r.clone());
+        let (s, r) = (s.clone(), r.clone());
         thread::spawn(move || {
             loop {
                 if let Ok(m) = r.recv() {
@@ -435,7 +434,7 @@ fn main() -> std::io::Result<()> {
                                         &timer,
                                         chrono::Local::now(),
                                         alarm,
-                                        _s.clone(),
+                                        s.clone(),
                                     ),
                                 );
                             }
@@ -448,7 +447,6 @@ fn main() -> std::io::Result<()> {
                                 sound: alarm.sound,
                                 enabled: true,
                                 rang_today: false,
-                                ringing: false,
                                 id: alarm.id,
                             };
                             alarm_timers.insert(
@@ -458,7 +456,7 @@ fn main() -> std::io::Result<()> {
                                     &timer,
                                     chrono::Local::now(),
                                     &alarm,
-                                    _s.clone(),
+                                    s.clone(),
                                 ),
                             );
                             config.alarms.insert(alarm);
@@ -475,10 +473,19 @@ fn main() -> std::io::Result<()> {
                         }
                         Alert::AlarmRinging(_) => {}
                         Alert::AlarmStopped(id) => {
-                            if let Some(config::Alarm { ringing, .. }) =
-                                config.alarms.data.get_mut(&id)
-                            {
-                                *ringing = false;
+                            if let Some(alarm) = config.alarms.data.get(&id) {
+                                alarm_timers.insert(
+                                    id,
+                                    alarm_to_timer(
+                                        &config,
+                                        &timer,
+                                        chrono::Local::now()
+                                            .checked_add_days(Days::new(0))
+                                            .unwrap(),
+                                        alarm,
+                                        s.clone(),
+                                    ),
+                                );
                             }
                         }
                     }
@@ -610,7 +617,7 @@ fn main() -> std::io::Result<()> {
 
 fn alarm_to_timer(
     config: &config::Config,
-    value: &Timer,
+    timer: &Timer,
     time: DateTime<chrono::Local>,
     alarm: &config::Alarm,
     s: crossbeam_channel::Sender<Alert>,
@@ -618,7 +625,8 @@ fn alarm_to_timer(
     let date = time.with_time(alarm.time).unwrap();
     let path = config.sounds.sounds.get(&alarm.sound).unwrap().path.clone();
     let id = alarm.id;
-    value.schedule_with_date(date, move || {
+    // TODO: if alarm time before current time, add a day.
+    timer.schedule_with_date(date, move || {
         s.send(Alert::AlarmRinging(id));
         let stream_handle = rodio::OutputStreamBuilder::open_default_stream().unwrap();
         let input =
@@ -629,7 +637,8 @@ fn alarm_to_timer(
         // sink.set_volume(volume / 100.0);
         sink.append(input);
         sink.play();
-        cpvc::set_mute(false);
-        ();
+        loop {
+            cpvc::set_mute(false);
+        }
     })
 }
