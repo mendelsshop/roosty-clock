@@ -7,6 +7,7 @@ use std::{
 
 use chrono::{NaiveTime, Timelike};
 use eframe::egui;
+use roosty_clockd::config;
 use serde::{Deserialize, Serialize};
 
 use crate::{alarm_edit::EditingState, AlarmBuilder, TimeOfDay};
@@ -43,14 +44,12 @@ pub struct Config {
     pub(crate) time_format: String,
     #[serde(default)]
     pub(crate) theme: Theme,
-    pub(crate) alarms: Vec<Alarm>,
-    #[serde(flatten)]
-    pub(crate) sounds: Sounds,
+    // TODO: move to roosty_clockd?
+    pub(crate) default_sound: String,
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Sounds {
     pub(crate) sounds: HashMap<String, Sound>,
-    pub(crate) default_sound: String,
 }
 
 impl Default for Config {
@@ -58,23 +57,11 @@ impl Default for Config {
         Self {
             time_format: "%l:%M %p".to_string(),
             theme: Theme::Dark,
-            alarms: vec![],
             // Ring,
             // BingBong,
             // TickTock,
             // Rain,
-            sounds: Sounds {
-                sounds: vec![
-                    ("ring".to_string(), Sound::ring()),
-                    ("bing bong".to_string(), Sound::bing_bong()),
-                    ("tick tock".to_string(), Sound::tick_tock()),
-                    ("beep beep".to_string(), Sound::beep_beep()),
-                    ("rain".to_string(), Sound::rain()),
-                ]
-                .into_iter()
-                .collect(),
-                default_sound: "beep beep".to_string(),
-            },
+            default_sound: "beep beep".to_string(),
         }
     }
 }
@@ -129,38 +116,11 @@ pub const fn always_true() -> bool {
     true
 }
 
-static mut UID: usize = 0;
 
-pub fn get_uid() -> usize {
-    // SAFETY: this is only called when we are creating a new alarm which only happens in the main thread
-    unsafe {
-        UID += 1;
-        UID
-    }
-}
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Alarm {
-    pub name: Option<String>,
-    #[serde(with = "toml_datetime_compat")]
-    pub time: NaiveTime,
-    pub volume: f32,
-    #[serde(default = "Sound::get_default_name")]
-    pub sound: String,
-    #[serde(default = "always_true")]
-    pub enabled: bool,
-    #[serde(skip)]
-    pub editing: Option<AlarmBuilder>,
-    #[serde(skip)]
-    pub rang_today: bool,
-    #[serde(skip)]
-    pub ringing: bool,
-    #[serde(skip, default = "get_uid")]
-    pub id: usize,
-}
 
-impl From<Alarm> for AlarmBuilder {
-    fn from(alarm: Alarm) -> Self {
+impl From<config::Alarm> for AlarmBuilder {
+    fn from(alarm: config::Alarm) -> Self {
         let (ampm, hour) = alarm.time.hour12();
 
         let minute = alarm.time.minute();
@@ -176,19 +136,9 @@ impl From<Alarm> for AlarmBuilder {
     }
 }
 
-impl AddAssign for Alarm {
-    /// used so that when we edit an alarm we don't lose its id
-    /// also so to reset the `rang_today` field
-    fn add_assign(&mut self, rhs: Self) {
-        self.time = rhs.time;
-        self.volume = rhs.volume;
-        self.sound = rhs.sound;
-        self.enabled = rhs.enabled;
-        self.name = rhs.name;
-    }
-}
 
-impl Alarm {
+
+impl config::Alarm {
     // returns true if we edited the alarm
     pub(crate) fn render_alarm(
         &mut self,

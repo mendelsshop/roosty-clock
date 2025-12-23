@@ -42,7 +42,7 @@ impl AlarmBuilder {
         }
     }
 
-    pub(crate) fn edit_alarm(&mut self, ui: &mut egui::Ui, sounds: &mut Sounds) {
+    pub(crate) fn edit_alarm(&mut self, ui: &mut egui::Ui, sounds: &HashMap<String, roosty_clockd::config::Sound>) {
         ui.horizontal(|ui| {
             ui.label("Alarm Name");
             ui.text_edit_singleline(&mut self.name);
@@ -116,15 +116,19 @@ impl AlarmBuilder {
         });
     }
 
-    pub(crate) fn render_sound_editor(&mut self, ui: &mut egui::Ui, sounds: &mut Sounds) {
-        Self::render_sound_selector_editor(&mut self.sound, ui, &mut sounds.sounds);
+    pub(crate) fn render_sound_editor(
+        &mut self,
+        ui: &mut egui::Ui,
+        sounds: &HashMap<String, roosty_clockd::config::Sound>,
+    ) {
+        Self::render_sound_selector_editor(&mut self.sound, ui, sounds);
         self.render_volume_slider(ui);
     }
 
     pub(crate) fn render_sound_selector_editor(
         sound: &mut String,
         ui: &mut egui::Ui,
-        sounds: &mut HashMap<String, Sound>,
+        sounds: &HashMap<String, roosty_clockd::config::Sound>,
     ) {
         ui.vertical(|ui| {
             // alarm sound
@@ -134,7 +138,10 @@ impl AlarmBuilder {
         });
     }
 
-    fn render_custom_alarm_sound_editor(sounds: &mut HashMap<String, Sound>, ui: &mut egui::Ui) {
+    fn render_custom_alarm_sound_editor(
+        sounds: &HashMap<String, roosty_clockd::config::Sound>,
+        ui: &mut egui::Ui,
+    ) {
         if ui.button("Custom").clicked() {
             // TODO: rfd with gnome opens Recents not audio folder https://github.com/PolyMeilex/rfd/issues/237
             let file_dialog = rfd::FileDialog::new().set_title("Pick alarm sound");
@@ -167,7 +174,7 @@ impl AlarmBuilder {
     pub(crate) fn render_alarm_sound_selector(
         sound: &mut String,
         ui: &mut egui::Ui,
-        sounds: &mut HashMap<String, Sound>,
+        sounds: &HashMap<String, roosty_clockd::config::Sound>,
     ) {
         ui.vertical(|ui| {
             // set size of alarm selector so it doesnt make alarm creation to big when using cutom alarm
@@ -194,7 +201,7 @@ impl AlarmBuilder {
     pub fn render_alarm_editor(
         &mut self,
         ctx: &egui::Context,
-        sounds: &mut Sounds,
+        sounds: &HashMap<String, roosty_clockd::config::Sound>
     ) -> EditingState {
         let mut ret = EditingState::Editing;
         // if no alarm name set we need way to differentiate between different alarms

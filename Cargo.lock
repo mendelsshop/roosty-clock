@@ -3128,6 +3128,7 @@ dependencies = [
  "log",
  "rfd",
  "rodio",
+ "roosty_clockd",
  "serde",
  "simple_file_logger",
  "toml",
