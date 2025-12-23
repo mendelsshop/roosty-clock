@@ -3139,10 +3139,13 @@ name = "roosty_clockd"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "cpvc",
  "crossbeam-channel",
  "directories",
  "interprocess",
+ "rodio",
  "serde",
+ "timer",
  "toml",
  "toml-datetime-compat",
 ]
@@ -3675,6 +3678,15 @@ dependencies = [
  "quick-error",
  "weezl",
  "zune-jpeg",
+]
+
+[[package]]
+name = "timer"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31d42176308937165701f50638db1c31586f183f1aab416268216577aec7306b"
+dependencies = [
+ "chrono",
 ]
 
 [[package]]

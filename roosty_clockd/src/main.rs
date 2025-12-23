@@ -5,13 +5,15 @@
     missing_debug_implementations,
     clippy::missing_panics_doc
 )]
-use chrono::NaiveTime;
+use chrono::{DateTime, NaiveTime};
 use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Stream, prelude::*};
+use rodio::{Sink, Source, decoder};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{self, BufReader, prelude::*};
 use std::sync::mpsc;
 use std::thread;
+use timer::{Guard, Timer};
 
 use crate::config::get_uid;
 
@@ -402,33 +404,44 @@ fn main() -> std::io::Result<()> {
     let (s, r) = crossbeam_channel::unbounded();
     let (s_server, r_server) = mpsc::channel();
 
+    let timer = Timer::new();
+    let mut alarm_timers: HashMap<u64, Guard> =
+        HashMap::from_iter(config.alarms.data.iter().map(|(id, alarm)| {
+            (
+                *id,
+                alarm_to_timer(&config, &timer, chrono::Local::now(), alarm, s.clone()),
+            )
+        }));
     {
         let (_s, r) = (s.clone(), r.clone());
-        thread::spawn(move || -> ! {
+        thread::spawn(move || {
             loop {
                 if let Ok(m) = r.recv() {
                     match m {
                         Alert::AlarmSet(id, alarm_edit) => {
-                            if let Some(config::Alarm {
-                                name,
-                                time,
-                                volume,
-                                sound,
-                                enabled,
-                                ..
-                            }) = config.alarms.data.get_mut(&id)
-                            {
+                            if let Some(alarm) = config.alarms.data.get_mut(&id) {
                                 match alarm_edit {
-                                    AlarmEdit::Time(new_time) => *time = new_time,
-                                    AlarmEdit::Name(new_name) => *name = new_name,
-                                    AlarmEdit::Sound(new_sound) => *sound = new_sound,
-                                    AlarmEdit::Volume(new_volume) => *volume = new_volume,
-                                    AlarmEdit::Enable(new_enabled) => *enabled = new_enabled,
+                                    AlarmEdit::Time(new_time) => alarm.time = new_time,
+                                    AlarmEdit::Name(new_name) => alarm.name = new_name,
+                                    AlarmEdit::Sound(new_sound) => alarm.sound = new_sound,
+                                    AlarmEdit::Volume(new_volume) => alarm.volume = new_volume,
+                                    AlarmEdit::Enable(new_enabled) => alarm.enabled = new_enabled,
                                 }
+                                let alarm = config.alarms.data.get(&id).unwrap();
+                                alarm_timers.insert(
+                                    alarm.id,
+                                    alarm_to_timer(
+                                        &config,
+                                        &timer,
+                                        chrono::Local::now(),
+                                        alarm,
+                                        _s.clone(),
+                                    ),
+                                );
                             }
                         }
                         Alert::AlaramAdded(alarm) => {
-                            config.alarms.insert(config::Alarm {
+                            let alarm = config::Alarm {
                                 name: alarm.name,
                                 time: alarm.time,
                                 volume: alarm.volume,
@@ -437,10 +450,22 @@ fn main() -> std::io::Result<()> {
                                 rang_today: false,
                                 ringing: false,
                                 id: alarm.id,
-                            });
+                            };
+                            alarm_timers.insert(
+                                alarm.id,
+                                alarm_to_timer(
+                                    &config,
+                                    &timer,
+                                    chrono::Local::now(),
+                                    &alarm,
+                                    _s.clone(),
+                                ),
+                            );
+                            config.alarms.insert(alarm);
                         }
                         Alert::AlarmRemoved(id) => {
                             config.alarms.data.remove(&id).unwrap();
+                            alarm_timers.remove(&id).unwrap();
                         }
                         Alert::SoundAdded(sound) => {
                             config.sounds.sounds.insert(sound.name.clone(), sound);
@@ -555,10 +580,10 @@ fn main() -> std::io::Result<()> {
                             )
                             .unwrap();
                     }
-                    Some(ServerResponce::Sounds(_sounds)) => {
+                    Some(ServerResponce::Sounds(sounds)) => {
                         write
                             .write(
-                                toml::to_string(&ServerMessage::Sounds(_sounds))
+                                toml::to_string(&ServerMessage::Sounds(sounds))
                                     .unwrap()
                                     .as_bytes(),
                             )
@@ -581,4 +606,30 @@ fn main() -> std::io::Result<()> {
     }
 
     Ok(())
+}
+
+fn alarm_to_timer(
+    config: &config::Config,
+    value: &Timer,
+    time: DateTime<chrono::Local>,
+    alarm: &config::Alarm,
+    s: crossbeam_channel::Sender<Alert>,
+) -> Guard {
+    let date = time.with_time(alarm.time).unwrap();
+    let path = config.sounds.sounds.get(&alarm.sound).unwrap().path.clone();
+    let id = alarm.id;
+    value.schedule_with_date(date, move || {
+        s.send(Alert::AlarmRinging(id));
+        let stream_handle = rodio::OutputStreamBuilder::open_default_stream().unwrap();
+        let input =
+            decoder::Decoder::new(BufReader::new(std::fs::File::open(path.clone()).unwrap()))
+                .unwrap()
+                .repeat_infinite();
+        let sink = Sink::connect_new(stream_handle.mixer());
+        // sink.set_volume(volume / 100.0);
+        sink.append(input);
+        sink.play();
+        cpvc::set_mute(false);
+        ();
+    })
 }
