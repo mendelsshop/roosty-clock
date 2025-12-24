@@ -89,7 +89,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let alarms = get_alarms(&mut conn);
     let sounds = get_sounds(&mut conn);
 
-
     // Print out the result, getting the newline for free!
     // print!("Server answered: {buffer}");
     //{

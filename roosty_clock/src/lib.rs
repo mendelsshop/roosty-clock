@@ -9,6 +9,7 @@ use std::{
 };
 
 use alarm_edit::EditingState;
+use base64::Engine;
 use chrono::Timelike;
 use config::{Config, Sound, Theme};
 use eframe::egui::{
@@ -43,8 +44,21 @@ pub fn send_to_server(
     conn: &mut BufReader<Stream>,
     message: roosty_clockd::ClientMessage,
 ) -> Result<(), ()> {
+    println!(
+        "{:?}",
+        base64::prelude::BASE64_STANDARD_NO_PAD
+            .encode(
+                toml::to_string(&message)
+                    .map_err(|e| {
+                        println!("{e}");
+                        ()
+                    })?
+                    .as_bytes()
+            )
+            .as_bytes()
+    );
     conn.get_mut()
-        .write(toml::to_string(&message).map_err(|_| ())?.as_bytes())
+        .write((toml::to_string(&message).map_err(|_| ())?.as_bytes()))
         .map_err(|_| ())
         .map(|_| ())
 }

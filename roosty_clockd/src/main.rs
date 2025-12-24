@@ -210,11 +210,9 @@ fn main() -> std::io::Result<()> {
             // be simultaneous without threads or async, we can deadlock the two processes by having
             // both sides wait for the send buffer to be emptied by the other.
             loop {
-                println!("wiating for message");
+                // TODO: maybe reading shouldn't block
                 if conn.read_to_end(&mut buffer).is_ok() {
-                    println!("got message");
                     if let Ok(message) = toml::from_slice(&buffer) {
-                        println!("got message");
                         match message {
                             ClientMessage::GetNewUID => {
                                 s_server
@@ -225,7 +223,6 @@ fn main() -> std::io::Result<()> {
                                     .unwrap();
                             }
                             ClientMessage::GetAlarms => {
-                                println!("alarms requred");
                                 s_server
                                     .send(ServerCommand {
                                         kind: ServerCommandKind::GetAlarms,
@@ -314,20 +311,24 @@ fn alarm_to_timer(
     let date = time.with_time(alarm.time).unwrap();
     let path = config.sounds.sounds.get(&alarm.sound).unwrap().path.clone();
     let id = alarm.id;
+    let enabled = alarm.enabled;
     // TODO: if alarm time before current time, add a day.
+
     timer.schedule_with_date(date, move || {
-        s.send(Alert::AlarmRinging(id));
-        let stream_handle = rodio::OutputStreamBuilder::open_default_stream().unwrap();
-        let input =
-            decoder::Decoder::new(BufReader::new(std::fs::File::open(path.clone()).unwrap()))
-                .unwrap()
-                .repeat_infinite();
-        let sink = Sink::connect_new(stream_handle.mixer());
-        // sink.set_volume(volume / 100.0);
-        sink.append(input);
-        sink.play();
-        loop {
-            cpvc::set_mute(false);
+        if enabled {
+            s.send(Alert::AlarmRinging(id));
+            let stream_handle = rodio::OutputStreamBuilder::open_default_stream().unwrap();
+            let input =
+                decoder::Decoder::new(BufReader::new(std::fs::File::open(path.clone()).unwrap()))
+                    .unwrap()
+                    .repeat_infinite();
+            let sink = Sink::connect_new(stream_handle.mixer());
+            // sink.set_volume(volume / 100.0);
+            sink.append(input);
+            sink.play();
+            loop {
+                cpvc::set_mute(false);
+            }
         }
     })
 }

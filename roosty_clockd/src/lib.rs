@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 pub mod config;
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "t", content = "c")]
 pub enum ClientMessage {
     GetAlarms,
     SetAlarm(u64, AlarmEdit),
@@ -35,6 +36,7 @@ pub enum AlarmEdit {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "t", content = "c")]
 pub enum ServerMessage {
     Alarms(HashMap<u64, config::Alarm>),
     AlarmSet(u64, AlarmEdit),
