@@ -2,6 +2,7 @@
 #![deny(clippy::use_self, rust_2018_idioms)]
 #![allow(clippy::multiple_crate_versions, clippy::module_name_repetitions)]
 
+use std::io::Read;
 use std::{
     collections::HashMap,
     io::{BufReader, Write},
@@ -16,7 +17,7 @@ use eframe::egui::{
 use interprocess::local_socket::Stream;
 
 pub mod config;
-use roosty_clockd::config as roosty_clockd_config;
+use roosty_clockd::{config as roosty_clockd_config, ServerMessage};
 
 /// implementation of alarm editing for egui
 pub mod alarm_edit;
@@ -38,6 +39,22 @@ pub struct Clock {
     conn: BufReader<Stream>,
 }
 
+pub fn send_to_server(
+    conn: &mut BufReader<Stream>,
+    message: roosty_clockd::ClientMessage,
+) -> Result<(), ()> {
+    conn.get_mut()
+        .write(toml::to_string(&message).map_err(|_| ())?.as_bytes())
+        .map_err(|_| ())
+        .map(|_| ())
+}
+pub fn recieve_from_server(
+    conn: &mut BufReader<Stream>,
+) -> Result<roosty_clockd::ServerMessage, ()> {
+    let mut bytes = vec![];
+    conn.read_to_end(&mut bytes).map_err(|_| ())?;
+    toml::from_slice::<'_, roosty_clockd::ServerMessage>(&bytes).map_err(|_| ())
+}
 #[derive(Debug, Clone, PartialEq)]
 pub struct AlarmBuilder {
     name: String,
@@ -133,19 +150,18 @@ impl Clock {
         for (i, (id, alarm)) in self.alarms.iter().enumerate().skip(skip) {
             if ui.button("x").on_hover_text("delete alarm").clicked() {
                 // handle if alarm is currently active
-                self.conn.get_mut().write(
-                    toml::to_string(&roosty_clockd::ClientMessage::RemoveAlarm(*id))
-                        .unwrap()
-                        .as_bytes(),
+                send_to_server(
+                    &mut self.conn,
+                    roosty_clockd::ClientMessage::RemoveAlarm(*id),
                 );
+
                 // write changes to disk
                 self.save();
                 self.list_alarms(ui, i, ctx);
                 break;
             }
 
-            let alarm_changed =
-                render_alarm(&self.config.time_format, ui, ctx, &mut self.sounds);
+            let alarm_changed = render_alarm(&self.config.time_format, ui, ctx, &mut self.sounds);
             if alarm_changed {
                 // even if alarm.enabled is false or alarm.rang_today is false
                 // it may have been rang today or enabled but the user changed the alarm
@@ -178,8 +194,17 @@ impl eframe::App for Clock {
             match editing.render_alarm_editor(ctx, &mut self.sounds) {
                 EditingState::Done(new_alarm) => {
                     self.adding_alarm = None;
-                    self.config.alarms.push(new_alarm);
-                    Self::save(self);
+                    send_to_server(
+                        &mut self.conn,
+                        roosty_clockd::ClientMessage::AddAlarm(roosty_clockd::Alarm {
+                            name: new_alarm.name,
+                            time: new_alarm.time,
+                            volume: new_alarm.volume,
+                            sound: new_alarm.sound,
+                            id: new_alarm.id,
+                        }),
+                    );
+                    self.alarms.insert(new_alarm.id, new_alarm);
                 }
                 EditingState::Cancelled => {
                     self.adding_alarm = None;
@@ -191,11 +216,15 @@ impl eframe::App for Clock {
         self.render_header(ctx);
         // // show all alarms
         CentralPanel::default().show(ctx, |ui| {
-            if ui.button("+").on_hover_text("add alarm").clicked() {
-                self.adding_alarm = Some(AlarmBuilder {
-                    sound: self.config.sounds.default_sound.clone(),
-                    ..Default::default()
-                });
+            send_to_server(&mut self.conn, roosty_clockd::ClientMessage::GetNewUID);
+            if let Ok(ServerMessage::UID(id)) = recieve_from_server(&mut self.conn) {
+                if ui.button("+").on_hover_text("add alarm").clicked() {
+                    self.adding_alarm = Some(AlarmBuilder {
+                        sound: self.config.default_sound.clone(),
+                        id,
+                        ..Default::default()
+                    });
+                }
             }
 
             ScrollArea::vertical().show(ui, |ui| {

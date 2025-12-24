@@ -107,14 +107,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn get_sounds(
     conn: &mut BufReader<LocalSocketStream>,
 ) -> HashMap<String, roosty_clockd::config::Sound> {
-    conn.get_mut()
-        .write(toml::to_string(&roosty_clockd::ClientMessage::GetAlarms).unwrap());
-    let bytes = vec![];
-    while !conn.read_to_end(&mut bytes).is_ok() {
-        bytes.clear();
-    }
+    roosty_clock::send_to_server(conn, roosty_clockd::ClientMessage::GetAlarms);
+
     if let Ok(roosty_clockd::ServerMessage::Alarms(alarms)) =
-        toml::from_slice::<'_, roosty_clockd::ServerMessage>(&bytes)
+        roosty_clock::recieve_from_server(conn)
     {
         alarms
     } else {
@@ -125,14 +121,10 @@ fn get_sounds(
 fn get_alarms(
     conn: &mut BufReader<LocalSocketStream>,
 ) -> HashMap<u64, roosty_clockd::config::Alarm> {
-    conn.get_mut()
-        .write(toml::to_string(&roosty_clockd::ClientMessage::GetSounds).unwrap());
-    let bytes = vec![];
-    while !conn.read_to_end(&mut bytes).is_ok() {
-        bytes.clear();
-    }
+    roosty_clock::send_to_server(conn, roosty_clockd::ClientMessage::GetSounds);
+
     if let Ok(roosty_clockd::ServerMessage::Sounds(sounds)) =
-        toml::from_slice::<'_, roosty_clockd::ServerMessage>(&bytes)
+        roosty_clock::recieve_from_server(conn)
     {
         sounds
     } else {
