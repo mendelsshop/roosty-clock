@@ -2,17 +2,18 @@ use std::{collections::HashMap, ffi::OsStr, iter, path::Path};
 
 use chrono::NaiveTime;
 use eframe::egui::{self, DragValue, Id, ScrollArea, Widget, Window};
+use roosty_clockd::config;
 
 use crate::{
-    config::{self, Alarm, Sound, Sounds},
+    config::{Sound, Sounds},
     widgets::{Knob, Value},
     AlarmBuilder, TimeOfDay,
 };
 
 impl AlarmBuilder {
     #[must_use]
-    pub fn build(self) -> config::Alarm {
-        config::Alarm {
+    pub fn build(self) -> roosty_clockd::config::Alarm {
+        roosty_clockd::config::Alarm {
             name: if self.name.is_empty() {
                 None
             } else {
@@ -35,14 +36,16 @@ impl AlarmBuilder {
             sound: self.sound,
             volume: self.volume,
             enabled: true,
-            editing: None,
             rang_today: false,
-            ringing: false,
             id: self.id,
         }
     }
 
-    pub(crate) fn edit_alarm(&mut self, ui: &mut egui::Ui, sounds: &HashMap<String, roosty_clockd::config::Sound>) {
+    pub(crate) fn edit_alarm(
+        &mut self,
+        ui: &mut egui::Ui,
+        sounds: &HashMap<String, roosty_clockd::config::Sound>,
+    ) {
         ui.horizontal(|ui| {
             ui.label("Alarm Name");
             ui.text_edit_singleline(&mut self.name);
@@ -157,15 +160,15 @@ impl AlarmBuilder {
             // when done in alarm editor which one do we pick if we have multiple alarms
             if let Some(paths) = { file_dialog }.pick_files() {
                 paths.iter().for_each(|path_name| {
-                    if let Some(name) = path_name.file_prefix().and_then(OsStr::to_str) {
-                        sounds.insert(
-                            name.to_string(),
-                            Sound {
-                                name: name.to_string(),
-                                path: path_name.clone(),
-                            },
-                        );
-                    }
+                    // if let Some(name) = path_name.file_prefix().and_then(OsStr::to_str) {
+                    //     sounds.insert(
+                    //         name.to_string(),
+                    //         roosty_clockd::config::Sound {
+                    //             name: name.to_string(),
+                    //             path: path_name.clone(),
+                    //         },
+                    //     );
+                    // }
                 });
             }
         }
@@ -201,7 +204,7 @@ impl AlarmBuilder {
     pub fn render_alarm_editor(
         &mut self,
         ctx: &egui::Context,
-        sounds: &HashMap<String, roosty_clockd::config::Sound>
+        sounds: &HashMap<String, roosty_clockd::config::Sound>,
     ) -> EditingState {
         let mut ret = EditingState::Editing;
         // if no alarm name set we need way to differentiate between different alarms
@@ -227,5 +230,5 @@ impl AlarmBuilder {
 pub enum EditingState {
     Cancelled,
     Editing,
-    Done(Alarm),
+    Done(config::Alarm),
 }

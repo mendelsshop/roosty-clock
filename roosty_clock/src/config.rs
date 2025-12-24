@@ -7,10 +7,10 @@ use std::{
 
 use chrono::{NaiveTime, Timelike};
 use eframe::egui;
-use roosty_clockd::config;
+use roosty_clockd::config::{self, Alarm};
 use serde::{Deserialize, Serialize};
 
-use crate::{alarm_edit::EditingState, AlarmBuilder, TimeOfDay};
+use crate::{AlarmBuilder, Clock, TimeOfDay, alarm_edit::EditingState};
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Theme {
@@ -138,78 +138,69 @@ impl From<config::Alarm> for AlarmBuilder {
 
 
 
-impl config::Alarm {
+impl Clock {
     // returns true if we edited the alarm
     pub(crate) fn render_alarm(
         &mut self,
-        time_format: &str,
+        alarm: &Alarm,
         ui: &mut eframe::egui::Ui,
         ctx: &eframe::egui::Context,
-        sounds: &mut Sounds,
     ) -> bool {
         let mut ret = false;
         ui.scope(|ui| {
             // gray out color if alarm is disabled
-            if !self.enabled {
+            if !alarm.enabled {
                 ui.set_opacity(ui.visuals().disabled_alpha());
             }
 
             ui.horizontal(|ui| {
                 // name
-                ui.label(self.name.as_ref().unwrap_or(&"alarm".to_string()));
+                ui.label(alarm.name.as_ref().unwrap_or(&"alarm".to_string()));
                 // on off button
-                if ui.checkbox(&mut self.enabled, "enabled").clicked() {
-                    ret = true;
-                }
+                // if ui.checkbox(&mut alarm.enabled, "enabled").clicked() {
+                    // TODO: send alarm enabled message
+                // }
             });
-            ui.label(self.time.format(time_format).to_string());
-            ui.label(format!("alarm sound: {}", self.sound));
-            if ui
-                .add(
-                    egui::Slider::new(&mut self.volume, 0.0..=100.0)
-                        .integer()
-                        .suffix("%")
-                        .text("volume"),
-                )
-                .changed()
-            {
-                ret = true;
-            }
+            ui.label(alarm.time.format(&self.config.time_format).to_string());
+            ui.label(format!("alarm sound: {}", alarm.sound));
+            // if ui
+            //     .add(
+            //         egui::Slider::new(&mut self.volume, 0.0..=100.0)
+            //             .integer()
+            //             .suffix("%")
+            //             .text("volume"),
+            //     )
+            //     .changed()
+            // {
+            //     ret = true;
+            // }
 
-            if let Some(editing) = &mut self.editing {
-                // TODO: passing the actual sounds
-                match editing.render_alarm_editor(ctx, sounds) {
-                    EditingState::Done(new_alarm) => {
-                        self.editing = None;
-                        ret = true;
-                        *self += new_alarm;
-                    }
-                    EditingState::Cancelled => {
-                        self.editing = None;
-                    }
-                    _ => {}
-                }
-            }
+            // if let Some(editing) = &mut self.editing {
+            //     // TODO: passing the actual sounds
+            //     match editing.render_alarm_editor(ctx, sounds) {
+            //         EditingState::Done(new_alarm) => {
+            //             self.editing = None;
+            //             ret = true;
+            //             *self += new_alarm;
+            //         }
+            //         EditingState::Cancelled => {
+            //             self.editing = None;
+            //         }
+            //         _ => {}
+            //     }
+            // }
             ui.horizontal(|ui| {
                 if ui.button("edit").clicked() {
                     // if alarm is set for 5:00 PM and you click edit it will show 5:00 PM instead of 12:00 AM
                     // by using current alarm config
-                    self.editing = Some(AlarmBuilder::from(self.clone()));
+                    // self.editing = Some(AlarmBuilder::from(self.clone()));
                 }
             });
         });
         ret
     }
 
-    pub fn send_stop(&mut self, sender: &std::sync::mpsc::Sender<crate::communication::Message>) {
-        sender
-            .send(crate::communication::Message::new(
-                crate::communication::MessageType::AlarmStopped,
-                self.id,
-            ))
-            .unwrap();
-        self.rang_today = false;
-    }
+
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -87,8 +87,8 @@ impl Clock {
     #[must_use]
     pub fn new(
         conn: BufReader<Stream>,
-        alarms: HashMap<u64, roosty_clockd_config::Alarm>,
         sounds: HashMap<String, roosty_clockd_config::Sound>,
+        alarms: HashMap<u64, roosty_clockd_config::Alarm>,
     ) -> Self {
         Self {
             config: Config::load(Config::config_path()),
@@ -161,14 +161,14 @@ impl Clock {
                 break;
             }
 
-            let alarm_changed = render_alarm(&self.config.time_format, ui, ctx, &mut self.sounds);
-            if alarm_changed {
-                // even if alarm.enabled is false or alarm.rang_today is false
-                // it may have been rang today or enabled but the user changed the alarm
-                self.save();
-                self.list_alarms(ui, i, ctx);
-                break;
-            }
+            // let alarm_changed = self.render_alarm(alarm, ui, ctx);
+            // if alarm_changed {
+            //     // even if alarm.enabled is false or alarm.rang_today is false
+            //     // it may have been rang today or enabled but the user changed the alarm
+            //     self.save();
+            //     self.list_alarms(ui, i, ctx);
+            //     break;
+            // }
             ui.end_row();
         }
     }
@@ -194,6 +194,7 @@ impl eframe::App for Clock {
             match editing.render_alarm_editor(ctx, &mut self.sounds) {
                 EditingState::Done(new_alarm) => {
                     self.adding_alarm = None;
+                    self.alarms.insert(new_alarm.id, new_alarm.clone());
                     send_to_server(
                         &mut self.conn,
                         roosty_clockd::ClientMessage::AddAlarm(roosty_clockd::Alarm {
@@ -204,7 +205,6 @@ impl eframe::App for Clock {
                             id: new_alarm.id,
                         }),
                     );
-                    self.alarms.insert(new_alarm.id, new_alarm);
                 }
                 EditingState::Cancelled => {
                     self.adding_alarm = None;

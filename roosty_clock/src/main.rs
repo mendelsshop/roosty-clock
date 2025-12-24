@@ -89,26 +89,26 @@ fn main() -> Result<(), Box<dyn Error>> {
     let alarms = get_alarms(&mut conn);
     let sounds = get_sounds(&mut conn);
 
-    conn.get_mut().write_all(b"Hello from client!\n")?;
 
     // Print out the result, getting the newline for free!
-    print!("Server answered: {buffer}");
+    // print!("Server answered: {buffer}");
     //{
 
     // run the gui
     run_native(
         "Roosty Clock",
         native_options,
-        Box::new(|_| Ok(Box::new(Clock::new(conn, alarms, sounds)))),
+        Box::new(|_| Ok(Box::new(Clock::new(conn, sounds, alarms)))),
     )
     .map_err(std::convert::Into::into)
 }
 
-fn get_sounds(
+fn get_alarms(
     conn: &mut BufReader<LocalSocketStream>,
-) -> HashMap<String, roosty_clockd::config::Sound> {
+) -> HashMap<u64, roosty_clockd::config::Alarm> {
     roosty_clock::send_to_server(conn, roosty_clockd::ClientMessage::GetAlarms);
 
+    println!("alarms");
     if let Ok(roosty_clockd::ServerMessage::Alarms(alarms)) =
         roosty_clock::recieve_from_server(conn)
     {
@@ -118,11 +118,12 @@ fn get_sounds(
     }
 }
 
-fn get_alarms(
+fn get_sounds(
     conn: &mut BufReader<LocalSocketStream>,
-) -> HashMap<u64, roosty_clockd::config::Alarm> {
+) -> HashMap<String, roosty_clockd::config::Sound> {
     roosty_clock::send_to_server(conn, roosty_clockd::ClientMessage::GetSounds);
 
+    println!("sounds");
     if let Ok(roosty_clockd::ServerMessage::Sounds(sounds)) =
         roosty_clock::recieve_from_server(conn)
     {
