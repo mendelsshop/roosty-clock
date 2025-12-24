@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::io::{self, BufReader, prelude::*};
 use std::sync::mpsc;
 use std::thread;
+use std::time::Duration;
 use timer::{Guard, Timer};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -97,7 +98,6 @@ fn main() -> std::io::Result<()> {
         thread::spawn(move || {
             loop {
                 if let Ok(m) = r.recv() {
-                    println!("got message");
                     match m {
                         Alert::AlarmSet(id, alarm_edit) => {
                             if let Some(alarm) = config.alarms.data.get_mut(&id) {
@@ -211,54 +211,57 @@ fn main() -> std::io::Result<()> {
             // both sides wait for the send buffer to be emptied by the other.
             loop {
                 // TODO: maybe reading shouldn't block
-                if conn.read_to_end(&mut buffer).is_ok() {
-                    if let Ok(message) = toml::from_slice(&buffer) {
-                        match message {
-                            ClientMessage::GetNewUID => {
-                                s_server
-                                    .send(ServerCommand {
-                                        kind: ServerCommandKind::NewUID,
-                                        reciever: s_client.clone(),
-                                    })
-                                    .unwrap();
-                            }
-                            ClientMessage::GetAlarms => {
-                                s_server
-                                    .send(ServerCommand {
-                                        kind: ServerCommandKind::GetAlarms,
-                                        reciever: s_client.clone(),
-                                    })
-                                    .unwrap();
-                            }
-                            ClientMessage::SetAlarm(alarm, alarm_edit) => {
-                                s.send(Alert::AlarmSet(alarm, alarm_edit)).unwrap();
-                            }
-                            ClientMessage::AddAlarm(alarm) => {
-                                s.send(Alert::AlaramAdded(alarm)).unwrap();
-                            }
-                            ClientMessage::RemoveAlarm(id) => {
-                                s.send(Alert::AlarmRemoved(id)).unwrap()
-                            }
-                            ClientMessage::GetSounds => {
-                                s_server
-                                    .send(ServerCommand {
-                                        kind: ServerCommandKind::GetSounds,
-                                        reciever: s_client.clone(),
-                                    })
-                                    .unwrap();
-                            }
-                            ClientMessage::AdddSound(sound) => {
-                                s.send(Alert::SoundAdded(sound)).unwrap();
-                            }
-
-                            ClientMessage::RemoveSound(sound) => {
-                                s.send(Alert::SoundRemoved(sound)).unwrap();
-                            }
-                            ClientMessage::StopAlarm(i) => s.send(Alert::AlarmStopped(i)).unwrap(),
+                // println!("got message {:?}", conn.fill_buf());
+                if conn.fill_buf().is_err()
+                    && conn.read_to_end(&mut buffer).is_ok()
+                    && let Ok(message) = toml::from_slice(&buffer)
+                {
+                    println!("got message");
+                    match message {
+                        ClientMessage::GetNewUID => {
+                            s_server
+                                .send(ServerCommand {
+                                    kind: ServerCommandKind::NewUID,
+                                    reciever: s_client.clone(),
+                                })
+                                .unwrap();
                         }
+                        ClientMessage::GetAlarms => {
+                            s_server
+                                .send(ServerCommand {
+                                    kind: ServerCommandKind::GetAlarms,
+                                    reciever: s_client.clone(),
+                                })
+                                .unwrap();
+                        }
+                        ClientMessage::SetAlarm(alarm, alarm_edit) => {
+                            s.send(Alert::AlarmSet(alarm, alarm_edit)).unwrap();
+                        }
+                        ClientMessage::AddAlarm(alarm) => {
+                            s.send(Alert::AlaramAdded(alarm)).unwrap();
+                        }
+                        ClientMessage::RemoveAlarm(id) => {
+                            s.send(Alert::AlarmRemoved(id)).unwrap();
+                        }
+                        ClientMessage::GetSounds => {
+                            s_server
+                                .send(ServerCommand {
+                                    kind: ServerCommandKind::GetSounds,
+                                    reciever: s_client.clone(),
+                                })
+                                .unwrap();
+                        }
+                        ClientMessage::AdddSound(sound) => {
+                            s.send(Alert::SoundAdded(sound)).unwrap();
+                        }
+
+                        ClientMessage::RemoveSound(sound) => {
+                            s.send(Alert::SoundRemoved(sound)).unwrap();
+                        }
+                        ClientMessage::StopAlarm(i) => s.send(Alert::AlarmStopped(i)).unwrap(),
                     }
                 }
-                match r_client.recv().ok() {
+                match r_client.recv_timeout(Duration::from_millis(10)).ok() {
                     Some(ServerResponce::NewUID(id)) => {
                         write
                             .write(toml::to_string(&ServerMessage::UID(id)).unwrap().as_bytes())

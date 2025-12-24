@@ -12,21 +12,15 @@ use std::{
     fs,
     io::{BufReader, Write},
     path::PathBuf,
-    thread,
 };
 
 use clap::{Parser, Subcommand};
 use eframe::{egui::ViewportBuilder, run_native};
-use rodio::{decoder, Sink, Source};
 use roosty_clock::{
-    communication::{Message, MessageType},
     config::Config,
     Clock,
 };
-use {
-    interprocess::local_socket::{prelude::*, GenericFilePath, GenericNamespaced, Stream},
-    std::io::prelude::*,
-};
+use interprocess::local_socket::{prelude::*, GenericFilePath, GenericNamespaced, Stream};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -105,7 +99,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn get_alarms(
     conn: &mut BufReader<LocalSocketStream>,
 ) -> HashMap<u64, roosty_clockd::config::Alarm> {
-    roosty_clock::send_to_server(conn, roosty_clockd::ClientMessage::GetAlarms);
+    roosty_clock::send_to_server(conn, roosty_clockd::ClientMessage::GetAlarms).unwrap();
 
     println!("alarms");
     if let Ok(roosty_clockd::ServerMessage::Alarms(alarms)) =
@@ -115,6 +109,7 @@ fn get_alarms(
     } else {
         panic!()
     }
+    // todo!()
 }
 
 fn get_sounds(
@@ -139,6 +134,6 @@ fn get_socket() -> Result<BufReader<LocalSocketStream>, Box<dyn Error + 'static>
         "/tmp/roosty-clockd.sock".to_fs_name::<GenericFilePath>()?
     };
     let conn = Stream::connect(name)?;
-    let mut conn = BufReader::new(conn);
+    let conn = BufReader::new(conn);
     Ok(conn)
 }

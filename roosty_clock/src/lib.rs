@@ -44,21 +44,8 @@ pub fn send_to_server(
     conn: &mut BufReader<Stream>,
     message: roosty_clockd::ClientMessage,
 ) -> Result<(), ()> {
-    println!(
-        "{:?}",
-        base64::prelude::BASE64_STANDARD_NO_PAD
-            .encode(
-                toml::to_string(&message)
-                    .map_err(|e| {
-                        println!("{e}");
-                        ()
-                    })?
-                    .as_bytes()
-            )
-            .as_bytes()
-    );
     conn.get_mut()
-        .write((toml::to_string(&message).map_err(|_| ())?.as_bytes()))
+        .write(toml::to_string(&message).map_err(|_| ())?.as_bytes())
         .map_err(|_| ())
         .map(|_| ())
 }
@@ -161,7 +148,7 @@ impl Clock {
     }
 
     fn list_alarms(&mut self, ui: &mut egui::Ui, skip: usize, ctx: &Context) {
-        for (i, (id, alarm)) in self.alarms.iter().enumerate().skip(skip) {
+        for (i, (id, _alarm)) in self.alarms.iter().enumerate().skip(skip) {
             if ui.button("x").on_hover_text("delete alarm").clicked() {
                 // handle if alarm is currently active
                 send_to_server(
@@ -205,7 +192,7 @@ impl eframe::App for Clock {
         }
         // alarm creation
         if let Some(editing) = &mut self.adding_alarm {
-            match editing.render_alarm_editor(ctx, &mut self.sounds) {
+            match editing.render_alarm_editor(ctx, &self.sounds) {
                 EditingState::Done(new_alarm) => {
                     self.adding_alarm = None;
                     self.alarms.insert(new_alarm.id, new_alarm.clone());
