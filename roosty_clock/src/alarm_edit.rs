@@ -1,11 +1,10 @@
-use std::{collections::HashMap, ffi::OsStr, iter, path::Path};
+use std::{collections::HashMap, iter, path::Path};
 
 use chrono::NaiveTime;
 use eframe::egui::{self, DragValue, Id, ScrollArea, Widget, Window};
 use roosty_clockd::config;
 
 use crate::{
-    config::{Sound, Sounds},
     widgets::{Knob, Value},
     AlarmBuilder, TimeOfDay,
 };
@@ -142,7 +141,7 @@ impl AlarmBuilder {
     }
 
     fn render_custom_alarm_sound_editor(
-        sounds: &HashMap<String, roosty_clockd::config::Sound>,
+        _sounds: &HashMap<String, roosty_clockd::config::Sound>,
         ui: &mut egui::Ui,
     ) {
         if ui.button("Custom").clicked() {
@@ -159,7 +158,7 @@ impl AlarmBuilder {
 
             // when done in alarm editor which one do we pick if we have multiple alarms
             if let Some(paths) = { file_dialog }.pick_files() {
-                paths.iter().for_each(|path_name| {
+                paths.iter().for_each(|_path_name| {
                     // if let Some(name) = path_name.file_prefix().and_then(OsStr::to_str) {
                     //     sounds.insert(
                     //         name.to_string(),

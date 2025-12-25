@@ -5,6 +5,7 @@
     missing_debug_implementations,
     clippy::missing_panics_doc
 )]
+use base64::Engine;
 use chrono::{DateTime, Days};
 use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Stream, prelude::*};
 use rodio::{Sink, Source, decoder};
@@ -80,6 +81,7 @@ fn main() -> std::io::Result<()> {
         x => x?,
     };
 
+    listener.set_nonblocking(interprocess::local_socket::ListenerNonblockingMode::Stream);
     eprintln!("Server running at {printname}");
 
     let (s, r) = crossbeam_channel::unbounded();
@@ -97,7 +99,7 @@ fn main() -> std::io::Result<()> {
         let (s, r) = (s.clone(), r.clone());
         thread::spawn(move || {
             loop {
-                if let Ok(m) = r.recv() {
+                if let Ok(m) = r.recv_timeout(Duration::from_millis(10)) {
                     match m {
                         Alert::AlarmSet(id, alarm_edit) => {
                             if let Some(alarm) = config.alarms.data.get_mut(&id) {
@@ -179,6 +181,7 @@ fn main() -> std::io::Result<()> {
                             reciever.send(ServerResponce::NewUID(get_uid())).unwrap();
                         }
                         ServerCommandKind::GetAlarms => {
+                            println!("get alarms - server server");
                             reciever
                                 .send(ServerResponce::Alarms(config.alarms.data.clone()))
                                 .unwrap();
@@ -198,7 +201,8 @@ fn main() -> std::io::Result<()> {
         let s_server = s_server.clone();
         thread::spawn(move || -> ! {
             let (read, mut write) = conn.split();
-            let mut buffer = Vec::new();
+            let _buffer: Vec<u8> = Vec::new();
+            let mut buffer = String::new();
             // Wrap the connection into a buffered receiver right away
             // so that we could receive a single line from it.
             let mut conn = BufReader::new(read);
@@ -210,13 +214,21 @@ fn main() -> std::io::Result<()> {
             // be simultaneous without threads or async, we can deadlock the two processes by having
             // both sides wait for the send buffer to be emptied by the other.
             loop {
+                // println!("waiting");
+                // println!("waiting {}", !conn.fill_buf().is_ok_and(|b| !b.is_empty()));
                 // TODO: maybe reading shouldn't block
                 // println!("got message {:?}", conn.fill_buf());
-                if conn.fill_buf().is_err()
-                    && conn.read_to_end(&mut buffer).is_ok()
-                    && let Ok(message) = toml::from_slice(&buffer)
+                if
+                // !conn.buffer().is_empty()
+                // &&
+                conn.read_line(&mut buffer).is_ok_and(|n|n>0)
+                    && let Ok(message) = toml::from_slice(
+                        &base64::prelude::BASE64_STANDARD
+                            .decode(&buffer[..buffer.len() - 1])
+                            .unwrap(),
+                    )
                 {
-                    println!("got message");
+                    println!("got message {message:?} {buffer:?}");
                     match message {
                         ClientMessage::GetNewUID => {
                             s_server
@@ -268,13 +280,15 @@ fn main() -> std::io::Result<()> {
                             .unwrap();
                     }
                     Some(ServerResponce::Alarms(alarms)) => {
-                        write
-                            .write(
-                                toml::to_string(&ServerMessage::Alarms(alarms))
-                                    .unwrap()
-                                    .as_bytes(),
-                            )
-                            .unwrap();
+                        let a = toml::to_string(&ServerMessage::Alarms(alarms)).unwrap();
+                        println!("alarms `{a}`");
+                        writeln!(
+                            write,
+                            "{}",
+                            base64::prelude::BASE64_STANDARD
+                                .encode(a)
+                        )
+                        .unwrap();
                     }
                     Some(ServerResponce::Sounds(sounds)) => {
                         write

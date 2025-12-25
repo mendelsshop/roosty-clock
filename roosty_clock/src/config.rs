@@ -1,16 +1,11 @@
-use std::{
-    collections::HashMap,
-    fmt,
-    ops::{AddAssign, Not},
-    path::PathBuf,
-};
+use std::{collections::HashMap, fmt, ops::Not, path::PathBuf};
 
-use chrono::{NaiveTime, Timelike};
+use chrono::Timelike;
 use eframe::egui;
 use roosty_clockd::config::{self, Alarm};
 use serde::{Deserialize, Serialize};
 
-use crate::{AlarmBuilder, Clock, TimeOfDay, alarm_edit::EditingState};
+use crate::{AlarmBuilder, Clock, TimeOfDay};
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Theme {
@@ -116,9 +111,6 @@ pub const fn always_true() -> bool {
     true
 }
 
-
-
-
 impl From<config::Alarm> for AlarmBuilder {
     fn from(alarm: config::Alarm) -> Self {
         let (ampm, hour) = alarm.time.hour12();
@@ -136,17 +128,15 @@ impl From<config::Alarm> for AlarmBuilder {
     }
 }
 
-
-
 impl Clock {
     // returns true if we edited the alarm
     pub(crate) fn render_alarm(
         &mut self,
         alarm: &Alarm,
         ui: &mut eframe::egui::Ui,
-        ctx: &eframe::egui::Context,
+        _ctx: &eframe::egui::Context,
     ) -> bool {
-        let mut ret = false;
+        let ret = false;
         ui.scope(|ui| {
             // gray out color if alarm is disabled
             if !alarm.enabled {
@@ -158,7 +148,7 @@ impl Clock {
                 ui.label(alarm.name.as_ref().unwrap_or(&"alarm".to_string()));
                 // on off button
                 // if ui.checkbox(&mut alarm.enabled, "enabled").clicked() {
-                    // TODO: send alarm enabled message
+                // TODO: send alarm enabled message
                 // }
             });
             ui.label(alarm.time.format(&self.config.time_format).to_string());
@@ -199,8 +189,6 @@ impl Clock {
         });
         ret
     }
-
-
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

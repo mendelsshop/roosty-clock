@@ -2,7 +2,7 @@
 #![deny(clippy::use_self, rust_2018_idioms)]
 #![allow(clippy::multiple_crate_versions, clippy::module_name_repetitions)]
 
-use std::io::Read;
+use std::io::BufRead;
 use std::{
     collections::HashMap,
     io::{BufReader, Write},
@@ -44,17 +44,27 @@ pub fn send_to_server(
     conn: &mut BufReader<Stream>,
     message: roosty_clockd::ClientMessage,
 ) -> Result<(), ()> {
-    conn.get_mut()
-        .write(toml::to_string(&message).map_err(|_| ())?.as_bytes())
-        .map_err(|_| ())
-        .map(|_| ())
+    writeln!(
+        conn.get_mut(),
+        "{}",
+        base64::prelude::BASE64_STANDARD
+            .encode(toml::to_string(&message).map_err(|_| ())?.as_bytes())
+    )
+    .map_err(|_| ())
 }
 pub fn recieve_from_server(
     conn: &mut BufReader<Stream>,
 ) -> Result<roosty_clockd::ServerMessage, ()> {
-    let mut bytes = vec![];
-    conn.read_to_end(&mut bytes).map_err(|_| ())?;
-    toml::from_slice::<'_, roosty_clockd::ServerMessage>(&bytes).map_err(|_| ())
+    let mut bytes = String::new();
+    conn.read_line(&mut bytes).map_err(|_| ())?;
+    let s = &base64::prelude::BASE64_STANDARD
+        .decode(&bytes[..bytes.len() - 1])
+        .unwrap();
+    println!("`{}`", str::from_utf8(s).unwrap());
+    toml::from_slice::<'_, roosty_clockd::ServerMessage>(s).map_err(|e| {
+        print!("{e}");
+        ();
+    })
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct AlarmBuilder {

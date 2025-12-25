@@ -35,3 +35,4 @@ toml = "0.9.8"
 clap = { version = "4.5.53", features = ["derive"] }
 interprocess = "2.2.3"
 roosty_clockd = { version = "0.1.0", path = "../roosty_clockd" }
+base64 = "0.22.1"
