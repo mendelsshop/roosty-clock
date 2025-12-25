@@ -18,7 +18,6 @@ pub enum ClientMessage {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Alarm {
     pub name: Option<String>,
-    #[serde(with = "toml_datetime_compat")]
     pub time: NaiveTime,
     pub volume: f32,
     pub sound: String,
@@ -26,7 +25,6 @@ pub struct Alarm {
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum AlarmEdit {
-    #[serde(with = "toml_datetime_compat")]
     Time(NaiveTime),
     Name(Option<String>),
     Sound(String),

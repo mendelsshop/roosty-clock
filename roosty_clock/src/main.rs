@@ -9,8 +9,7 @@
 use std::{
     collections::HashMap,
     error::Error,
-    fs,
-    io::{BufReader, Write},
+    io::BufReader,
     path::PathBuf,
 };
 
@@ -58,13 +57,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(Command::Init { force }) => {
             if force && Config::is_config_present() || !Config::is_config_present() {
                 Config::new().save(Config::config_path());
-                // write alarm sounds (from assets folder)
-                std::fs::create_dir_all(Config::sounds_path()).unwrap();
-                let mut beep_beep_file =
-                    fs::File::create(Config::sounds_path().join("beep_beep.mp3")).unwrap();
-                beep_beep_file
-                    .write_all(std::include_bytes!("../assets/beep_beep.mp3"))
-                    .unwrap();
             }
         }
         Some(Command::NewSound { name: _, path: _ }) => {}

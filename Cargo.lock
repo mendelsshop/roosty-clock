@@ -765,6 +765,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link 0.2.1",
 ]
@@ -3163,7 +3164,6 @@ dependencies = [
  "serde",
  "simple_file_logger",
  "toml",
- "toml-datetime-compat",
 ]
 
 [[package]]
@@ -3180,7 +3180,6 @@ dependencies = [
  "serde",
  "timer",
  "toml",
- "toml-datetime-compat",
 ]
 
 [[package]]
@@ -3766,31 +3765,10 @@ dependencies = [
  "indexmap",
  "serde_core",
  "serde_spanned",
- "toml_datetime 0.7.5+spec-1.1.0",
+ "toml_datetime",
  "toml_parser",
  "toml_writer",
  "winnow",
-]
-
-[[package]]
-name = "toml-datetime-compat"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18435fd3f58059d1fcd97ff5620a25a461d072f28a9121685ae0f84b5ddbd653"
-dependencies = [
- "chrono",
- "serde",
- "thiserror 1.0.69",
- "toml_datetime 0.5.1",
-]
-
-[[package]]
-name = "toml_datetime"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4553f467ac8e3d374bc9a177a26801e5d0f9b211aa1673fb137a403afd1c9cf5"
-dependencies = [
- "serde",
 ]
 
 [[package]]
@@ -3809,7 +3787,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "84c8b9f757e028cee9fa244aea147aab2a9ec09d5325a9b01e0a49730c2b5269"
 dependencies = [
  "indexmap",
- "toml_datetime 0.7.5+spec-1.1.0",
+ "toml_datetime",
  "toml_parser",
  "winnow",
 ]

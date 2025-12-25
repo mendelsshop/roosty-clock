@@ -134,7 +134,7 @@ impl Config {
 
     #[must_use]
     pub fn config_path() -> PathBuf {
-        let mut path = directories::ProjectDirs::from("", "", "roosty_clock")
+        let mut path = directories::ProjectDirs::from("", "", "roosty_clockd")
             .expect("couldn't get config path")
             .config_dir()
             .to_path_buf();
@@ -144,7 +144,7 @@ impl Config {
 
     #[must_use]
     pub fn sounds_path() -> PathBuf {
-        let mut path = directories::ProjectDirs::from("", "", "roosty_clock")
+        let mut path = directories::ProjectDirs::from("", "", "roosty_clockd")
             .expect("couldn't get sounds directory path")
             .data_dir()
             .to_path_buf();
@@ -181,7 +181,7 @@ impl GetId<u64> for Alarm {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Alarm {
     pub name: Option<String>,
-    #[serde(with = "toml_datetime_compat")]
+    // #[serde(with = "toml_datetime_compat")]
     pub time: NaiveTime,
     pub volume: f32,
     #[serde(default = "Sound::get_default_name")]

@@ -10,10 +10,12 @@ use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Stream, pre
 use rodio::{Sink, Source, decoder};
 use roosty_clockd::ClientMessage;
 use roosty_clockd::ServerMessage;
+use roosty_clockd::config::Config;
 use roosty_clockd::config::{self, get_uid};
 use roosty_clockd::{Alarm, AlarmEdit};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
 use std::io::{self, BufReader, prelude::*};
 use std::sync::mpsc;
 use std::thread;
@@ -60,6 +62,16 @@ fn main() -> std::io::Result<()> {
         }
     }
 
+    if !Config::is_config_present() {
+        Config::new().save(Config::config_path());
+        // write alarm sounds (from assets folder)
+        std::fs::create_dir_all(Config::sounds_path()).unwrap();
+        let mut beep_beep_file =
+            fs::File::create(Config::sounds_path().join("beep_beep.mp3")).unwrap();
+        beep_beep_file
+            .write_all(std::include_bytes!("../../assets/beep_beep.mp3"))
+            .unwrap();
+    }
     let mut config = config::Config::load(config::Config::config_path());
     // Pick a name.
     let printname = "roosty-clockd.sock";
@@ -272,10 +284,11 @@ fn main() -> std::io::Result<()> {
                 }
                 match r_client.recv_timeout(Duration::from_millis(10)).ok() {
                     Some(ServerResponce::NewUID(id)) => {
-                        let bytes = bitcode::serialize(&ServerMessage::UID(id))
+                        let mut bytes = bitcode::serialize(&ServerMessage::UID(id))
                             .map_err(|_| ())
                             .unwrap();
 
+                        bytes.push(b'\n');
                         println!("sending alarm {:?}", str::from_utf8(&bytes));
                         conn.get_mut().write(&bytes);
                     }
@@ -293,14 +306,11 @@ fn main() -> std::io::Result<()> {
                         conn.get_mut().write(&bytes);
                     }
                     Some(ServerResponce::Sounds(sounds)) => {
-                        let bytes = bitcode::serialize(&ServerMessage::Sounds(sounds))
+                        let mut bytes = bitcode::serialize(&ServerMessage::Sounds(sounds))
                             .map_err(|_| ())
                             .unwrap();
+                        bytes.push(b'\n');
 
-                        println!(
-                            "sending alarm {:?}",
-                            str::from_utf8(&bytes).unwrap().to_string() + "\n"
-                        );
                         conn.get_mut().write(&bytes);
                     }
                     None => {}
