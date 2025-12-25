@@ -16,11 +16,8 @@ use std::{
 
 use clap::{Parser, Subcommand};
 use eframe::{egui::ViewportBuilder, run_native};
-use roosty_clock::{
-    config::Config,
-    Clock,
-};
 use interprocess::local_socket::{prelude::*, GenericFilePath, GenericNamespaced, Stream};
+use roosty_clock::{config::Config, Clock};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

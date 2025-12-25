@@ -9,7 +9,6 @@ use std::{
 };
 
 use alarm_edit::EditingState;
-use base64::Engine;
 use chrono::Timelike;
 use config::{Config, Sound, Theme};
 use eframe::egui::{
@@ -44,25 +43,25 @@ pub fn send_to_server(
     conn: &mut BufReader<Stream>,
     message: roosty_clockd::ClientMessage,
 ) -> Result<(), ()> {
-    writeln!(
-        conn.get_mut(),
-        "{}",
-        base64::prelude::BASE64_STANDARD
-            .encode(toml::to_string(&message).map_err(|_| ())?.as_bytes())
-    )
-    .map_err(|_| ())
+    let mut bytes = bitcode::serialize(&message).map_err(|_| ())?;
+    bytes.push(b'\n');
+
+    println!("sending alarm {:?}", str::from_utf8(&bytes));
+    conn.get_mut().write(&bytes).map_err(|_| ()).map(|_| ())
 }
 pub fn recieve_from_server(
     conn: &mut BufReader<Stream>,
 ) -> Result<roosty_clockd::ServerMessage, ()> {
-    let mut bytes = String::new();
-    conn.read_line(&mut bytes).map_err(|_| ())?;
-    let s = &base64::prelude::BASE64_STANDARD
-        .decode(&bytes[..bytes.len() - 1])
-        .unwrap();
-    println!("`{}`", str::from_utf8(s).unwrap());
-    toml::from_slice::<'_, roosty_clockd::ServerMessage>(s).map_err(|e| {
-        print!("{e}");
+    let mut bytes = Vec::new();
+    conn.read_until(b'\n', &mut bytes).map_err(|e| {
+        println!("e: {e}");
+        ();
+    })?;
+    bytes.pop();
+    println!("got {bytes:?}");
+
+    bitcode::deserialize(&bytes).map_err(|e| {
+        println!("e1: {e}");
         ();
     })
 }

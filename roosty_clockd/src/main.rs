@@ -5,7 +5,6 @@
     missing_debug_implementations,
     clippy::missing_panics_doc
 )]
-use base64::Engine;
 use chrono::{DateTime, Days};
 use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Stream, prelude::*};
 use rodio::{Sink, Source, decoder};
@@ -200,12 +199,10 @@ fn main() -> std::io::Result<()> {
         let (s, _r) = (s.clone(), r.clone());
         let s_server = s_server.clone();
         thread::spawn(move || -> ! {
-            let (read, mut write) = conn.split();
-            let _buffer: Vec<u8> = Vec::new();
-            let mut buffer = String::new();
+            let mut buffer: Vec<u8> = Vec::new();
             // Wrap the connection into a buffered receiver right away
             // so that we could receive a single line from it.
-            let mut conn = BufReader::new(read);
+            let mut conn = BufReader::new(conn);
             println!("Incoming connection!");
 
             let (s_client, r_client) = mpsc::channel();
@@ -215,18 +212,18 @@ fn main() -> std::io::Result<()> {
             // both sides wait for the send buffer to be emptied by the other.
             loop {
                 // println!("waiting");
-                // println!("waiting {}", !conn.fill_buf().is_ok_and(|b| !b.is_empty()));
                 // TODO: maybe reading shouldn't block
-                // println!("got message {:?}", conn.fill_buf());
-                if
-                // !conn.buffer().is_empty()
-                // &&
-                conn.read_line(&mut buffer).is_ok_and(|n|n>0)
-                    && let Ok(message) = toml::from_slice(
-                        &base64::prelude::BASE64_STANDARD
-                            .decode(&buffer[..buffer.len() - 1])
-                            .unwrap(),
-                    )
+                if conn
+                    .read_until(b'\n', &mut buffer)
+                    .map_err(|_e| {
+                        ();
+                    })
+                    .is_ok_and(|n| n > 0)
+                    && let Ok(message) =
+                        bitcode::deserialize(&buffer[..buffer.len() - 1]).map_err(|e| {
+                            println!("{e}");
+                            ();
+                        })
                 {
                     println!("got message {message:?} {buffer:?}");
                     match message {
@@ -275,29 +272,36 @@ fn main() -> std::io::Result<()> {
                 }
                 match r_client.recv_timeout(Duration::from_millis(10)).ok() {
                     Some(ServerResponce::NewUID(id)) => {
-                        write
-                            .write(toml::to_string(&ServerMessage::UID(id)).unwrap().as_bytes())
+                        let bytes = bitcode::serialize(&ServerMessage::UID(id))
+                            .map_err(|_| ())
                             .unwrap();
+
+                        println!("sending alarm {:?}", str::from_utf8(&bytes));
+                        conn.get_mut().write(&bytes);
                     }
                     Some(ServerResponce::Alarms(alarms)) => {
-                        let a = toml::to_string(&ServerMessage::Alarms(alarms)).unwrap();
-                        println!("alarms `{a}`");
-                        writeln!(
-                            write,
-                            "{}",
-                            base64::prelude::BASE64_STANDARD
-                                .encode(a)
-                        )
-                        .unwrap();
+                        let mut bytes = bitcode::serialize(&ServerMessage::Alarms(alarms))
+                            .map_err(|_| ())
+                            .unwrap();
+
+                        println!(
+                            "sending alarm {:?} {:?}",
+                            (bytes),
+                            bitcode::deserialize::<'_, ServerMessage>(&bytes)
+                        );
+                        bytes.push(b'\n');
+                        conn.get_mut().write(&bytes);
                     }
                     Some(ServerResponce::Sounds(sounds)) => {
-                        write
-                            .write(
-                                toml::to_string(&ServerMessage::Sounds(sounds))
-                                    .unwrap()
-                                    .as_bytes(),
-                            )
+                        let bytes = bitcode::serialize(&ServerMessage::Sounds(sounds))
+                            .map_err(|_| ())
                             .unwrap();
+
+                        println!(
+                            "sending alarm {:?}",
+                            str::from_utf8(&bytes).unwrap().to_string() + "\n"
+                        );
+                        conn.get_mut().write(&bytes);
                     }
                     None => {}
                 }

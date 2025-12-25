@@ -14,4 +14,4 @@ directories = "6.0.0"
 timer = "0.2.0"
 rodio = "0.21.1"
 cpvc = { git = "https://github.com/xephyris/cpvc", version = "0.4.1" }
-base64 = "0.22.1"
+bitcode = { version = "0.6.9", features = ["serde"] }
