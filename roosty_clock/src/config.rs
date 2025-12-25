@@ -132,11 +132,12 @@ impl Clock {
     // returns true if we edited the alarm
     pub(crate) fn render_alarm(
         &mut self,
-        alarm: &Alarm,
+        alarm: u64,
         ui: &mut eframe::egui::Ui,
         _ctx: &eframe::egui::Context,
     ) -> bool {
         let ret = false;
+        let alarm: &mut Alarm = self.alarms.get_mut(&alarm).unwrap();
         ui.scope(|ui| {
             // gray out color if alarm is disabled
             if !alarm.enabled {

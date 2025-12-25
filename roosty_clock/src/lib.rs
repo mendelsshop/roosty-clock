@@ -46,7 +46,6 @@ pub fn send_to_server(
     let mut bytes = bitcode::serialize(&message).map_err(|_| ())?;
     bytes.push(b'\n');
 
-    println!("sending alarm {:?}", str::from_utf8(&bytes));
     conn.get_mut().write(&bytes).map_err(|_| ()).map(|_| ())
 }
 pub fn recieve_from_server(
@@ -157,12 +156,19 @@ impl Clock {
     }
 
     fn list_alarms(&mut self, ui: &mut egui::Ui, skip: usize, ctx: &Context) {
-        for (i, (id, _alarm)) in self.alarms.iter().enumerate().skip(skip) {
+        let collect = self
+            .alarms
+            .keys()
+            .copied()
+            .enumerate()
+            .skip(skip)
+            .collect::<Vec<_>>();
+        for (i, id) in collect {
             if ui.button("x").on_hover_text("delete alarm").clicked() {
                 // handle if alarm is currently active
                 send_to_server(
                     &mut self.conn,
-                    roosty_clockd::ClientMessage::RemoveAlarm(*id),
+                    roosty_clockd::ClientMessage::RemoveAlarm(id),
                 );
 
                 // write changes to disk
@@ -171,7 +177,7 @@ impl Clock {
                 break;
             }
 
-            // let alarm_changed = self.render_alarm(alarm, ui, ctx);
+            let _alarm_changed = self.render_alarm(id, ui, ctx);
             // if alarm_changed {
             //     // even if alarm.enabled is false or alarm.rang_today is false
             //     // it may have been rang today or enabled but the user changed the alarm
@@ -226,9 +232,9 @@ impl eframe::App for Clock {
         self.render_header(ctx);
         // // show all alarms
         CentralPanel::default().show(ctx, |ui| {
-            send_to_server(&mut self.conn, roosty_clockd::ClientMessage::GetNewUID);
-            if let Ok(ServerMessage::UID(id)) = recieve_from_server(&mut self.conn) {
-                if ui.button("+").on_hover_text("add alarm").clicked() {
+            if ui.button("+").on_hover_text("add alarm").clicked() {
+                send_to_server(&mut self.conn, roosty_clockd::ClientMessage::GetNewUID);
+                if let Ok(ServerMessage::UID(id)) = recieve_from_server(&mut self.conn) {
                     self.adding_alarm = Some(AlarmBuilder {
                         sound: self.config.default_sound.clone(),
                         id,
