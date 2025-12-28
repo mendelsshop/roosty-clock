@@ -93,7 +93,7 @@ fn main() -> std::io::Result<()> {
         x => x?,
     };
 
-    listener.set_nonblocking(interprocess::local_socket::ListenerNonblockingMode::Stream);
+    // listener.set_nonblocking(interprocess::local_socket::ListenerNonblockingMode::Stream);
     eprintln!("Server running at {printname}");
 
     let (s, r) = crossbeam_channel::unbounded();
@@ -211,14 +211,17 @@ fn main() -> std::io::Result<()> {
     for conn in listener.incoming().filter_map(handle_error) {
         let (s, _r) = (s.clone(), r.clone());
         let s_server = s_server.clone();
+        // let mut conn = BufReader::new(conn);
+        let (reader, mut writer) = conn.split();
+        let (s_client, r_client) = mpsc::channel();
         thread::spawn(move || -> ! {
+            let mut reader = BufReader::new(reader);
             let mut buffer: Vec<u8> = Vec::new();
             // Wrap the connection into a buffered receiver right away
             // so that we could receive a single line from it.
-            let mut conn = BufReader::new(conn);
+            // let mut conn = BufReader::new(reader);
             println!("Incoming connection!");
 
-            let (s_client, r_client) = mpsc::channel();
             // Since our client example sends first, the server should receive a line and only then
             // send a response. Otherwise, because receiving from and sending to a connection cannot
             // be simultaneous without threads or async, we can deadlock the two processes by having
@@ -226,11 +229,15 @@ fn main() -> std::io::Result<()> {
             loop {
                 // println!("waiting");
                 // TODO: maybe reading shouldn't block
-                if roosty_clockd::read(&mut conn, &mut buffer)
+                if reader
+                    .read_to_end(&mut buffer)
                     .map_err(|_e| {
                         ();
                     })
-                    .is_ok_and(|n| n > 0)
+                    .is_ok_and(|n| {
+                        println!("foo");
+                        n > 0
+                    })
                     && let Ok(message) =
                         bitcode::deserialize(&buffer[..buffer.len() - 1]).map_err(|e| {
                             println!("{e}");
@@ -282,39 +289,6 @@ fn main() -> std::io::Result<()> {
                         ClientMessage::StopAlarm(i) => s.send(Alert::AlarmStopped(i)).unwrap(),
                     }
                 }
-                match r_client.recv_timeout(Duration::from_millis(10)).ok() {
-                    Some(ServerResponce::NewUID(id)) => {
-                        let bytes = bitcode::serialize(&ServerMessage::UID(id))
-                            .map_err(|_| ())
-                            .unwrap();
-
-                        // bytes.push(b'\n');
-                        println!("sending alarm {:?}", str::from_utf8(&bytes));
-                        conn.get_mut().write(&bytes);
-                    }
-                    Some(ServerResponce::Alarms(alarms)) => {
-                        let bytes = bitcode::serialize(&ServerMessage::Alarms(alarms))
-                            .map_err(|_| ())
-                            .unwrap();
-
-                        println!(
-                            "sending alarm {:?} {:?}",
-                            (bytes),
-                            bitcode::deserialize::<'_, ServerMessage>(&bytes)
-                        );
-                        // bytes.push(b'\n');
-                        conn.get_mut().write(&bytes);
-                    }
-                    Some(ServerResponce::Sounds(sounds)) => {
-                        let bytes = bitcode::serialize(&ServerMessage::Sounds(sounds))
-                            .map_err(|_| ())
-                            .unwrap();
-                        // bytes.push(b'\n');
-
-                        conn.get_mut().write(&bytes);
-                    }
-                    None => {}
-                }
 
                 // Now that the receive has come through and the client is waiting on the server's send, do
                 // it. (`.get_mut()` is to get the sender, `BufReader` doesn't implement a pass-through
@@ -325,6 +299,42 @@ fn main() -> std::io::Result<()> {
                 // Clear the buffer so that the next iteration will display new data instead of messages
                 // stacking on top of one another.
                 buffer.clear();
+            }
+        });
+
+        std::thread::spawn(move || {
+            match r_client.recv_timeout(Duration::from_millis(10)).ok() {
+                Some(ServerResponce::NewUID(id)) => {
+                    let bytes = bitcode::serialize(&ServerMessage::UID(id))
+                        .map_err(|_| ())
+                        .unwrap();
+
+                    // bytes.push(b'\n');
+                    println!("sending alarm {:?}", str::from_utf8(&bytes));
+                    writer.write(&bytes);
+                }
+                Some(ServerResponce::Alarms(alarms)) => {
+                    let bytes = bitcode::serialize(&ServerMessage::Alarms(alarms))
+                        .map_err(|_| ())
+                        .unwrap();
+
+                    println!(
+                        "sending alarm {:?} {:?}",
+                        (bytes),
+                        bitcode::deserialize::<'_, ServerMessage>(&bytes)
+                    );
+                    // bytes.push(b'\n');
+                    writer.write(&bytes);
+                }
+                Some(ServerResponce::Sounds(sounds)) => {
+                    let bytes = bitcode::serialize(&ServerMessage::Sounds(sounds))
+                        .map_err(|_| ())
+                        .unwrap();
+                    // bytes.push(b'\n');
+
+                    writer.write(&bytes);
+                }
+                None => {}
             }
         });
     }
