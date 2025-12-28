@@ -6,12 +6,7 @@
     clippy::missing_panics_doc
 )]
 
-use std::{
-    collections::HashMap,
-    error::Error,
-    io::BufReader,
-    path::PathBuf,
-};
+use std::{collections::HashMap, error::Error, io::BufReader, path::PathBuf};
 
 use clap::{Parser, Subcommand};
 use eframe::{egui::ViewportBuilder, run_native};

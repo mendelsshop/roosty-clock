@@ -1,6 +1,9 @@
 use chrono::NaiveTime;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    io::{self, BufRead, ErrorKind},
+};
 
 pub mod config;
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -44,4 +47,35 @@ pub enum ServerMessage {
     AlarmRinging(u64),
     AlarmStopped(u64),
     UID(u64),
+}
+pub(crate) fn is_interrupted(e: &io::Error) -> bool {
+    match e.kind() {
+        ErrorKind::Interrupted => true,
+        _ => false,
+    }
+}
+pub fn read<R: BufRead + ?Sized>(r: &mut R, buf: &mut Vec<u8>) -> io::Result<usize> {
+    let mut read = 0;
+    loop {
+        let used = {
+            println!("got {buf:?}");
+            let available = match r.fill_buf() {
+                Ok(n) => n,
+                Err(ref e) if is_interrupted(e) => {
+                    println!("skuo ");
+                    continue;
+                }
+                Err(e) => return Err(e),
+            };
+            buf.extend_from_slice(available);
+            println!("foo");
+            available.len()
+        };
+        r.consume(used);
+        read += used;
+        // println!("{used} {read:?}");
+        if used == 0 {
+            return Ok(read);
+        }
+    }
 }

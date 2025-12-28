@@ -2,7 +2,6 @@
 #![deny(clippy::use_self, rust_2018_idioms)]
 #![allow(clippy::multiple_crate_versions, clippy::module_name_repetitions)]
 
-use std::io::BufRead;
 use std::{
     collections::HashMap,
     io::{BufReader, Write},
@@ -43,8 +42,8 @@ pub fn send_to_server(
     conn: &mut BufReader<Stream>,
     message: roosty_clockd::ClientMessage,
 ) -> Result<(), ()> {
-    let mut bytes = bitcode::serialize(&message).map_err(|_| ())?;
-    bytes.push(b'\n');
+    let bytes = bitcode::serialize(&message).map_err(|_| ())?;
+    // bytes.push(b'\n');
 
     conn.get_mut().write(&bytes).map_err(|_| ()).map(|_| ())
 }
@@ -52,10 +51,11 @@ pub fn recieve_from_server(
     conn: &mut BufReader<Stream>,
 ) -> Result<roosty_clockd::ServerMessage, ()> {
     let mut bytes = Vec::new();
-    conn.read_until(b'\n', &mut bytes).map_err(|e| {
+    roosty_clockd::read(conn, &mut bytes).map_err(|e| {
         println!("e: {e}");
         ();
     })?;
+    println!("got {bytes:?}");
     bytes.pop();
     println!("got {bytes:?}");
 

@@ -49,6 +49,7 @@ pub enum ServerCommandKind {
     GetAlarms,
     GetSounds,
 }
+
 fn main() -> std::io::Result<()> {
     // Define a function that checks for errors in incoming connections. We'll use this to filter
     // through connections that fail on initialization for one reason or another.
@@ -225,8 +226,7 @@ fn main() -> std::io::Result<()> {
             loop {
                 // println!("waiting");
                 // TODO: maybe reading shouldn't block
-                if conn
-                    .read_until(b'\n', &mut buffer)
+                if roosty_clockd::read(&mut conn, &mut buffer)
                     .map_err(|_e| {
                         ();
                     })
@@ -284,16 +284,16 @@ fn main() -> std::io::Result<()> {
                 }
                 match r_client.recv_timeout(Duration::from_millis(10)).ok() {
                     Some(ServerResponce::NewUID(id)) => {
-                        let mut bytes = bitcode::serialize(&ServerMessage::UID(id))
+                        let bytes = bitcode::serialize(&ServerMessage::UID(id))
                             .map_err(|_| ())
                             .unwrap();
 
-                        bytes.push(b'\n');
+                        // bytes.push(b'\n');
                         println!("sending alarm {:?}", str::from_utf8(&bytes));
                         conn.get_mut().write(&bytes);
                     }
                     Some(ServerResponce::Alarms(alarms)) => {
-                        let mut bytes = bitcode::serialize(&ServerMessage::Alarms(alarms))
+                        let bytes = bitcode::serialize(&ServerMessage::Alarms(alarms))
                             .map_err(|_| ())
                             .unwrap();
 
@@ -302,14 +302,14 @@ fn main() -> std::io::Result<()> {
                             (bytes),
                             bitcode::deserialize::<'_, ServerMessage>(&bytes)
                         );
-                        bytes.push(b'\n');
+                        // bytes.push(b'\n');
                         conn.get_mut().write(&bytes);
                     }
                     Some(ServerResponce::Sounds(sounds)) => {
-                        let mut bytes = bitcode::serialize(&ServerMessage::Sounds(sounds))
+                        let bytes = bitcode::serialize(&ServerMessage::Sounds(sounds))
                             .map_err(|_| ())
                             .unwrap();
-                        bytes.push(b'\n');
+                        // bytes.push(b'\n');
 
                         conn.get_mut().write(&bytes);
                     }
