@@ -2,7 +2,7 @@ use chrono::NaiveTime;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    io::{self, BufRead, ErrorKind},
+    io::{self, BufRead, BufWriter, Write},
 };
 
 pub mod config;
@@ -48,34 +48,16 @@ pub enum ServerMessage {
     AlarmStopped(u64),
     UID(u64),
 }
-pub(crate) fn is_interrupted(e: &io::Error) -> bool {
-    match e.kind() {
-        ErrorKind::Interrupted => true,
-        _ => false,
-    }
+
+pub fn write<W: Write>(w: &mut BufWriter<W>, message: &[u8]) -> io::Result<usize> {
+    let len = message.len().to_ne_bytes();
+    w.write(&len)?;
+    w.write(message)
 }
-pub fn read<R: BufRead + ?Sized>(r: &mut R, buf: &mut Vec<u8>) -> io::Result<usize> {
-    let mut read = 0;
-    loop {
-        let used = {
-            println!("got {buf:?}");
-            let available = match r.fill_buf() {
-                Ok(n) => n,
-                Err(ref e) if is_interrupted(e) => {
-                    println!("skuo ");
-                    continue;
-                }
-                Err(e) => return Err(e),
-            };
-            buf.extend_from_slice(available);
-            println!("foo");
-            available.len()
-        };
-        r.consume(used);
-        read += used;
-        // println!("{used} {read:?}");
-        if used == 0 {
-            return Ok(read);
-        }
-    }
+pub fn read<R: BufRead + ?Sized>(r: &mut R, buf: &mut Vec<u8>) -> io::Result<()> {
+    let mut header = 0_usize.to_ne_bytes();
+    r.read_exact(&mut header)?;
+    let size = usize::from_ne_bytes(header);
+    buf.resize(size, 0);
+    r.read_exact(buf.as_mut_slice())
 }

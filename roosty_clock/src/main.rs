@@ -6,11 +6,18 @@
     clippy::missing_panics_doc
 )]
 
-use std::{collections::HashMap, error::Error, io::BufReader, path::PathBuf};
+use std::{
+    collections::HashMap,
+    error::Error,
+    io::{BufReader, BufWriter},
+    path::PathBuf,
+};
 
 use clap::{Parser, Subcommand};
 use eframe::{egui::ViewportBuilder, run_native};
-use interprocess::local_socket::{prelude::*, GenericFilePath, GenericNamespaced, Stream};
+use interprocess::local_socket::{
+    prelude::*, GenericFilePath, GenericNamespaced, RecvHalf, SendHalf, Stream,
+};
 use roosty_clock::{config::Config, Clock};
 
 #[derive(Parser)]
@@ -63,9 +70,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         None => {}
     }
 
-    let mut conn = get_socket()?;
-    let alarms = get_alarms(&mut conn);
-    let sounds = get_sounds(&mut conn);
+    let conn = get_socket()?;
+    let (recv, send) = conn.split();
+    let mut recv = BufReader::new(recv);
+    let mut send = BufWriter::new(send);
+    let alarms = get_alarms(&mut recv, &mut send);
+    let sounds = get_sounds(&mut recv, &mut send);
 
     // Print out the result, getting the newline for free!
     // print!("Server answered: {buffer}");
@@ -75,19 +85,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     run_native(
         "Roosty Clock",
         native_options,
-        Box::new(|_| Ok(Box::new(Clock::new(conn, sounds, alarms)))),
+        Box::new(|_| Ok(Box::new(Clock::new(send, recv, sounds, alarms)))),
     )
     .map_err(std::convert::Into::into)
 }
 
 fn get_alarms(
-    conn: &mut BufReader<LocalSocketStream>,
+    recv: &mut BufReader<RecvHalf>,
+    send: &mut BufWriter<SendHalf>,
 ) -> HashMap<u64, roosty_clockd::config::Alarm> {
-    roosty_clock::send_to_server(conn, roosty_clockd::ClientMessage::GetAlarms).unwrap();
+    roosty_clock::send_to_server(send, roosty_clockd::ClientMessage::GetAlarms).unwrap();
 
     println!("alarms");
     if let Ok(roosty_clockd::ServerMessage::Alarms(alarms)) =
-        roosty_clock::recieve_from_server(conn)
+        roosty_clock::recieve_from_server(recv)
     {
         alarms
     } else {
@@ -97,13 +108,14 @@ fn get_alarms(
 }
 
 fn get_sounds(
-    conn: &mut BufReader<LocalSocketStream>,
+    recv: &mut BufReader<RecvHalf>,
+    send: &mut BufWriter<SendHalf>,
 ) -> HashMap<String, roosty_clockd::config::Sound> {
-    roosty_clock::send_to_server(conn, roosty_clockd::ClientMessage::GetSounds);
+    roosty_clock::send_to_server(send, roosty_clockd::ClientMessage::GetSounds);
 
     println!("sounds");
     if let Ok(roosty_clockd::ServerMessage::Sounds(sounds)) =
-        roosty_clock::recieve_from_server(conn)
+        roosty_clock::recieve_from_server(recv)
     {
         sounds
     } else {
@@ -111,13 +123,12 @@ fn get_sounds(
     }
 }
 
-fn get_socket() -> Result<BufReader<LocalSocketStream>, Box<dyn Error + 'static>> {
+fn get_socket() -> Result<LocalSocketStream, Box<dyn Error + 'static>> {
     let name = if GenericNamespaced::is_supported() {
         "roosty-clockd.sock".to_ns_name::<GenericNamespaced>()?
     } else {
         "/tmp/roosty-clockd.sock".to_fs_name::<GenericFilePath>()?
     };
     let conn = Stream::connect(name)?;
-    let conn = BufReader::new(conn);
     Ok(conn)
 }

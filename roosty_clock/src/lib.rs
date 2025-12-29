@@ -4,7 +4,7 @@
 
 use std::{
     collections::HashMap,
-    io::{BufReader, Write},
+    io::{BufReader, BufWriter},
 };
 
 use alarm_edit::EditingState;
@@ -13,7 +13,7 @@ use config::{Config, Sound, Theme};
 use eframe::egui::{
     self, Button, CentralPanel, Context, Grid, Layout, ScrollArea, TopBottomPanel, Window,
 };
-use interprocess::local_socket::Stream;
+use interprocess::local_socket::{RecvHalf, SendHalf};
 
 pub mod config;
 use roosty_clockd::{config as roosty_clockd_config, ServerMessage};
@@ -35,20 +35,21 @@ pub struct Clock {
     adding_alarm: Option<AlarmBuilder>,
     alarms: HashMap<u64, roosty_clockd_config::Alarm>,
     sounds: HashMap<String, roosty_clockd_config::Sound>,
-    conn: BufReader<Stream>,
+    recv: BufReader<RecvHalf>,
+    send: BufWriter<SendHalf>,
 }
 
 pub fn send_to_server(
-    conn: &mut BufReader<Stream>,
+    w: &mut BufWriter<SendHalf>,
     message: roosty_clockd::ClientMessage,
 ) -> Result<(), ()> {
     let bytes = bitcode::serialize(&message).map_err(|_| ())?;
     // bytes.push(b'\n');
 
-    conn.get_mut().write(&bytes).map_err(|_| ()).map(|_| ())
+    roosty_clockd::write(w, &bytes).map_err(|_| ()).map(|_| ())
 }
 pub fn recieve_from_server(
-    conn: &mut BufReader<Stream>,
+    conn: &mut BufReader<RecvHalf>,
 ) -> Result<roosty_clockd::ServerMessage, ()> {
     let mut bytes = Vec::new();
     roosty_clockd::read(conn, &mut bytes).map_err(|e| {
@@ -95,7 +96,8 @@ impl Default for AlarmBuilder {
 impl Clock {
     #[must_use]
     pub fn new(
-        conn: BufReader<Stream>,
+        send: BufWriter<SendHalf>,
+        recv: BufReader<RecvHalf>,
         sounds: HashMap<String, roosty_clockd_config::Sound>,
         alarms: HashMap<u64, roosty_clockd_config::Alarm>,
     ) -> Self {
@@ -103,7 +105,8 @@ impl Clock {
             config: Config::load(Config::config_path()),
             sounds,
             alarms,
-            conn,
+            send,
+            recv,
             in_config: false,
             adding_alarm: None,
         }
@@ -167,7 +170,7 @@ impl Clock {
             if ui.button("x").on_hover_text("delete alarm").clicked() {
                 // handle if alarm is currently active
                 send_to_server(
-                    &mut self.conn,
+                    &mut self.send,
                     roosty_clockd::ClientMessage::RemoveAlarm(id),
                 );
 
@@ -212,7 +215,7 @@ impl eframe::App for Clock {
                     self.adding_alarm = None;
                     self.alarms.insert(new_alarm.id, new_alarm.clone());
                     send_to_server(
-                        &mut self.conn,
+                        &mut self.send,
                         roosty_clockd::ClientMessage::AddAlarm(roosty_clockd::Alarm {
                             name: new_alarm.name,
                             time: new_alarm.time,
@@ -233,8 +236,8 @@ impl eframe::App for Clock {
         // // show all alarms
         CentralPanel::default().show(ctx, |ui| {
             if ui.button("+").on_hover_text("add alarm").clicked() {
-                send_to_server(&mut self.conn, roosty_clockd::ClientMessage::GetNewUID);
-                if let Ok(ServerMessage::UID(id)) = recieve_from_server(&mut self.conn) {
+                send_to_server(&mut self.send, roosty_clockd::ClientMessage::GetNewUID);
+                if let Ok(ServerMessage::UID(id)) = recieve_from_server(&mut self.recv) {
                     self.adding_alarm = Some(AlarmBuilder {
                         sound: self.config.default_sound.clone(),
                         id,

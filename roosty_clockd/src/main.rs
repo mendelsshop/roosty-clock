@@ -12,10 +12,14 @@ use roosty_clockd::ClientMessage;
 use roosty_clockd::ServerMessage;
 use roosty_clockd::config::Config;
 use roosty_clockd::config::{self, get_uid};
+use roosty_clockd::read;
+use roosty_clockd::write;
 use roosty_clockd::{Alarm, AlarmEdit};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
+use std::io::BufWriter;
+use std::io::ErrorKind;
 use std::io::{self, BufReader, prelude::*};
 use std::sync::mpsc;
 use std::thread;
@@ -212,7 +216,8 @@ fn main() -> std::io::Result<()> {
         let (s, _r) = (s.clone(), r.clone());
         let s_server = s_server.clone();
         // let mut conn = BufReader::new(conn);
-        let (reader, mut writer) = conn.split();
+        let (reader, writer) = conn.split();
+
         let (s_client, r_client) = mpsc::channel();
         thread::spawn(move || -> ! {
             let mut reader = BufReader::new(reader);
@@ -229,20 +234,23 @@ fn main() -> std::io::Result<()> {
             loop {
                 // println!("waiting");
                 // TODO: maybe reading shouldn't block
-                if reader
-                    .read_to_end(&mut buffer)
+                if {
+                    println!("data:{:?}", reader.fill_buf());
+                    true
+                } && read(&mut reader, &mut buffer)
                     .map_err(|_e| {
+                        _e.kind() == ErrorKind::ResourceBusy;
+                        // println!("e: {_e:?}");
                         ();
                     })
-                    .is_ok_and(|n| {
-                        println!("foo");
-                        n > 0
-                    })
-                    && let Ok(message) =
+                    .is_ok()
+                    && let Ok(message) = {
+                        println!("data found");
                         bitcode::deserialize(&buffer[..buffer.len() - 1]).map_err(|e| {
-                            println!("{e}");
+                            println!("ee{e}");
                             ();
                         })
+                    }
                 {
                     println!("got message {message:?} {buffer:?}");
                     match message {
@@ -303,6 +311,7 @@ fn main() -> std::io::Result<()> {
         });
 
         std::thread::spawn(move || {
+            let mut writer = BufWriter::new(writer);
             match r_client.recv_timeout(Duration::from_millis(10)).ok() {
                 Some(ServerResponce::NewUID(id)) => {
                     let bytes = bitcode::serialize(&ServerMessage::UID(id))
@@ -311,7 +320,7 @@ fn main() -> std::io::Result<()> {
 
                     // bytes.push(b'\n');
                     println!("sending alarm {:?}", str::from_utf8(&bytes));
-                    writer.write(&bytes);
+                    write(&mut writer, &bytes);
                 }
                 Some(ServerResponce::Alarms(alarms)) => {
                     let bytes = bitcode::serialize(&ServerMessage::Alarms(alarms))
@@ -324,7 +333,7 @@ fn main() -> std::io::Result<()> {
                         bitcode::deserialize::<'_, ServerMessage>(&bytes)
                     );
                     // bytes.push(b'\n');
-                    writer.write(&bytes);
+                    write(&mut writer, &bytes);
                 }
                 Some(ServerResponce::Sounds(sounds)) => {
                     let bytes = bitcode::serialize(&ServerMessage::Sounds(sounds))
@@ -332,7 +341,7 @@ fn main() -> std::io::Result<()> {
                         .unwrap();
                     // bytes.push(b'\n');
 
-                    writer.write(&bytes);
+                    write(&mut writer, &bytes);
                 }
                 None => {}
             }
