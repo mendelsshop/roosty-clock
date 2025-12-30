@@ -2,10 +2,7 @@
 #![deny(clippy::use_self, rust_2018_idioms)]
 #![allow(clippy::multiple_crate_versions, clippy::module_name_repetitions)]
 
-use std::{
-    collections::HashMap,
-    io::BufReader,
-};
+use std::{collections::HashMap, io::BufReader, mem};
 
 use alarm_edit::EditingState;
 use chrono::Timelike;
@@ -36,13 +33,11 @@ pub struct Clock {
     alarms: HashMap<u64, roosty_clockd_config::Alarm>,
     sounds: HashMap<String, roosty_clockd_config::Sound>,
     recv: BufReader<RecvHalf>,
+    alarm_edits: HashMap<u64, AlarmBuilder>,
     send: SendHalf,
 }
 
-pub fn send_to_server(
-    w: &mut SendHalf,
-    message: roosty_clockd::ClientMessage,
-) -> Result<(), ()> {
+pub fn send_to_server(w: &mut SendHalf, message: roosty_clockd::ClientMessage) -> Result<(), ()> {
     let bytes = bitcode::serialize(&message).map_err(|_| ())?;
     // bytes.push(b'\n');
 
@@ -102,6 +97,7 @@ impl Clock {
         alarms: HashMap<u64, roosty_clockd_config::Alarm>,
     ) -> Self {
         Self {
+            alarm_edits: HashMap::new(),
             config: Config::load(Config::config_path()),
             sounds,
             alarms,
@@ -166,7 +162,7 @@ impl Clock {
             .enumerate()
             .skip(skip)
             .collect::<Vec<_>>();
-        for (i, id) in collect {
+        for (_i, id) in collect {
             if ui.button("x").on_hover_text("delete alarm").clicked() {
                 // handle if alarm is currently active
                 send_to_server(
@@ -174,20 +170,12 @@ impl Clock {
                     roosty_clockd::ClientMessage::RemoveAlarm(id),
                 );
 
-                // write changes to disk
-                self.save();
-                self.list_alarms(ui, i, ctx);
+                self.alarms.remove(&id);
+                self.list_alarms(ui, 0, ctx);
                 break;
             }
 
             let _alarm_changed = self.render_alarm(id, ui, ctx);
-            // if alarm_changed {
-            //     // even if alarm.enabled is false or alarm.rang_today is false
-            //     // it may have been rang today or enabled but the user changed the alarm
-            //     self.save();
-            //     self.list_alarms(ui, i, ctx);
-            //     break;
-            // }
             ui.end_row();
         }
     }
@@ -251,6 +239,30 @@ impl eframe::App for Clock {
                     self.list_alarms(ui, 0, ctx);
                 });
             });
+
+            let mut old_alarm_edits = HashMap::new();
+            mem::swap(&mut old_alarm_edits, &mut self.alarm_edits);
+            self.alarm_edits =
+                HashMap::from_iter(old_alarm_edits.into_iter().filter_map(|(id, mut alarm)| {
+                    match alarm.render_alarm_editor(ctx, &self.sounds) {
+                        EditingState::Cancelled => None,
+                        EditingState::Editing => Some((id, alarm)),
+                        EditingState::Done(alarm) => {
+                            self.alarms.insert(id, alarm.clone());
+                            send_to_server(
+                                &mut self.send,
+                                roosty_clockd::ClientMessage::AddAlarm(roosty_clockd::Alarm {
+                                    name: alarm.name,
+                                    time: alarm.time,
+                                    volume: alarm.volume,
+                                    sound: alarm.sound,
+                                    id,
+                                }),
+                            );
+                            None
+                        }
+                    }
+                }));
         });
     }
 }

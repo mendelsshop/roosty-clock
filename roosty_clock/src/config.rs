@@ -136,7 +136,7 @@ impl Clock {
         ui: &mut eframe::egui::Ui,
         _ctx: &eframe::egui::Context,
     ) -> bool {
-        let ret = false;
+        let mut ret = false;
         let alarm: &mut Alarm = self.alarms.get_mut(&alarm).unwrap();
         ui.scope(|ui| {
             // gray out color if alarm is disabled
@@ -156,22 +156,28 @@ impl Clock {
                             roosty_clockd::AlarmEdit::Enable(alarm.enabled),
                         ),
                     );
-                    // TODO: send alarm enabled message
                 }
             });
             ui.label(alarm.time.format(&self.config.time_format).to_string());
             ui.label(format!("alarm sound: {}", alarm.sound));
-            // if ui
-            //     .add(
-            //         egui::Slider::new(&mut self.volume, 0.0..=100.0)
-            //             .integer()
-            //             .suffix("%")
-            //             .text("volume"),
-            //     )
-            //     .changed()
-            // {
-            //     ret = true;
-            // }
+            if ui
+                .add(
+                    egui::Slider::new(&mut alarm.volume, 0.0..=100.0)
+                        .integer()
+                        .suffix("%")
+                        .text("volume"),
+                )
+                .changed()
+            {
+                send_to_server(
+                    &mut self.send,
+                    roosty_clockd::ClientMessage::SetAlarm(
+                        alarm.id,
+                        roosty_clockd::AlarmEdit::Volume(alarm.volume),
+                    ),
+                );
+                ret = true;
+            }
 
             // if let Some(editing) = &mut self.editing {
             //     // TODO: passing the actual sounds
@@ -188,10 +194,11 @@ impl Clock {
             //     }
             // }
             ui.horizontal(|ui| {
+                // if alarm is set for 5:00 PM and you click edit it will show 5:00 PM instead of 12:00 AM
+                // by using current alarm config
                 if ui.button("edit").clicked() {
-                    // if alarm is set for 5:00 PM and you click edit it will show 5:00 PM instead of 12:00 AM
-                    // by using current alarm config
-                    // self.editing = Some(AlarmBuilder::from(self.clone()));
+                    self.alarm_edits
+                        .insert(alarm.id, AlarmBuilder::from(alarm.clone()));
                 }
             });
         });
