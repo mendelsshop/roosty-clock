@@ -5,7 +5,7 @@ use eframe::egui;
 use roosty_clockd::config::{self, Alarm};
 use serde::{Deserialize, Serialize};
 
-use crate::{AlarmBuilder, Clock, TimeOfDay};
+use crate::{send_to_server, AlarmBuilder, Clock, TimeOfDay};
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Theme {
@@ -148,9 +148,16 @@ impl Clock {
                 // name
                 ui.label(alarm.name.as_ref().unwrap_or(&"alarm".to_string()));
                 // on off button
-                // if ui.checkbox(&mut alarm.enabled, "enabled").clicked() {
-                // TODO: send alarm enabled message
-                // }
+                if ui.checkbox(&mut alarm.enabled, "enabled").clicked() {
+                    send_to_server(
+                        &mut self.send,
+                        roosty_clockd::ClientMessage::SetAlarm(
+                            alarm.id,
+                            roosty_clockd::AlarmEdit::Enable(alarm.enabled),
+                        ),
+                    );
+                    // TODO: send alarm enabled message
+                }
             });
             ui.label(alarm.time.format(&self.config.time_format).to_string());
             ui.label(format!("alarm sound: {}", alarm.sound));

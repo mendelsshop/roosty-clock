@@ -8,11 +8,11 @@
 use chrono::{DateTime, Days};
 use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Stream, prelude::*};
 use rodio::{Sink, Source, decoder};
-use roosty_clockd::ClientMessage;
 use roosty_clockd::config::Config;
 use roosty_clockd::config::{self, get_uid};
 use roosty_clockd::read;
 use roosty_clockd::{Alarm, AlarmEdit};
+use roosty_clockd::{ClientMessage, ServerMessage};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -209,10 +209,11 @@ fn main() -> std::io::Result<()> {
         });
     }
     for conn in listener.incoming().filter_map(handle_error) {
+        // TODO: handle alerts from other threads, has to have access to writer
         let (s, _r) = (s.clone(), r.clone());
         let s_server = s_server.clone();
         // let mut conn = BufReader::new(conn);
-        let (reader, _writer) = conn.split();
+        let (reader, mut writer) = conn.split();
 
         let (s_client, _r_client) = mpsc::channel();
         thread::spawn(move || -> ! {
@@ -284,6 +285,15 @@ fn main() -> std::io::Result<()> {
                         }
                         ClientMessage::StopAlarm(i) => s.send(Alert::AlarmStopped(i)).unwrap(),
                     }
+                }
+                if let Ok(message) = _r_client.recv_timeout(Duration::from_millis(10)) {
+                    let message = match message {
+                        ServerResponce::NewUID(id) => ServerMessage::UID(id),
+                        ServerResponce::Alarms(alarms) => ServerMessage::Alarms(alarms),
+                        ServerResponce::Sounds(sounds) => ServerMessage::Sounds(sounds),
+                    };
+                    let message = bitcode::serialize(&message).unwrap();
+                    roosty_clockd::write(&mut writer, &message);
                 }
 
                 // Now that the receive has come through and the client is waiting on the server's send, do

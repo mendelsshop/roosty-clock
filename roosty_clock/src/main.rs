@@ -6,12 +6,7 @@
     clippy::missing_panics_doc
 )]
 
-use std::{
-    collections::HashMap,
-    error::Error,
-    io::BufReader,
-    path::PathBuf,
-};
+use std::{collections::HashMap, error::Error, io::BufReader, path::PathBuf};
 
 use clap::{Parser, Subcommand};
 use eframe::{egui::ViewportBuilder, run_native};
@@ -76,6 +71,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // let mut send = BufWriter::new(send);
     let alarms = get_alarms(&mut recv, &mut send);
     let sounds = get_sounds(&mut recv, &mut send);
+    println!("done");
 
     // Print out the result, getting the newline for free!
     // print!("Server answered: {buffer}");
@@ -104,7 +100,6 @@ fn get_alarms(
     } else {
         panic!()
     }
-    // todo!()
 }
 
 fn get_sounds(
