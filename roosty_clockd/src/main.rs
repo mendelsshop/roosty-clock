@@ -9,17 +9,13 @@ use chrono::{DateTime, Days};
 use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Stream, prelude::*};
 use rodio::{Sink, Source, decoder};
 use roosty_clockd::ClientMessage;
-use roosty_clockd::ServerMessage;
 use roosty_clockd::config::Config;
 use roosty_clockd::config::{self, get_uid};
 use roosty_clockd::read;
-use roosty_clockd::write;
 use roosty_clockd::{Alarm, AlarmEdit};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::io::BufWriter;
-use std::io::ErrorKind;
 use std::io::{self, BufReader, prelude::*};
 use std::sync::mpsc;
 use std::thread;
@@ -216,11 +212,12 @@ fn main() -> std::io::Result<()> {
         let (s, _r) = (s.clone(), r.clone());
         let s_server = s_server.clone();
         // let mut conn = BufReader::new(conn);
-        let (reader, writer) = conn.split();
+        let (reader, _writer) = conn.split();
 
-        let (s_client, r_client) = mpsc::channel();
+        let (s_client, _r_client) = mpsc::channel();
         thread::spawn(move || -> ! {
-            let mut reader = BufReader::new(reader);
+            // let mut reader = BufReader::new(reader);
+            let mut reader = reader;
             let mut buffer: Vec<u8> = Vec::new();
             // Wrap the connection into a buffered receiver right away
             // so that we could receive a single line from it.
@@ -232,21 +229,12 @@ fn main() -> std::io::Result<()> {
             // be simultaneous without threads or async, we can deadlock the two processes by having
             // both sides wait for the send buffer to be emptied by the other.
             loop {
-                // println!("waiting");
+                println!("waiting");
                 // TODO: maybe reading shouldn't block
-                if {
-                    println!("data:{:?}", reader.fill_buf());
-                    true
-                } && read(&mut reader, &mut buffer)
-                    .map_err(|_e| {
-                        _e.kind() == ErrorKind::ResourceBusy;
-                        // println!("e: {_e:?}");
-                        ();
-                    })
-                    .is_ok()
+                if read(&mut reader, &mut buffer).is_ok()
                     && let Ok(message) = {
                         println!("data found");
-                        bitcode::deserialize(&buffer[..buffer.len() - 1]).map_err(|e| {
+                        bitcode::deserialize(&buffer).map_err(|e| {
                             println!("ee{e}");
                             ();
                         })
@@ -307,43 +295,6 @@ fn main() -> std::io::Result<()> {
                 // Clear the buffer so that the next iteration will display new data instead of messages
                 // stacking on top of one another.
                 buffer.clear();
-            }
-        });
-
-        std::thread::spawn(move || {
-            let mut writer = BufWriter::new(writer);
-            match r_client.recv_timeout(Duration::from_millis(10)).ok() {
-                Some(ServerResponce::NewUID(id)) => {
-                    let bytes = bitcode::serialize(&ServerMessage::UID(id))
-                        .map_err(|_| ())
-                        .unwrap();
-
-                    // bytes.push(b'\n');
-                    println!("sending alarm {:?}", str::from_utf8(&bytes));
-                    write(&mut writer, &bytes);
-                }
-                Some(ServerResponce::Alarms(alarms)) => {
-                    let bytes = bitcode::serialize(&ServerMessage::Alarms(alarms))
-                        .map_err(|_| ())
-                        .unwrap();
-
-                    println!(
-                        "sending alarm {:?} {:?}",
-                        (bytes),
-                        bitcode::deserialize::<'_, ServerMessage>(&bytes)
-                    );
-                    // bytes.push(b'\n');
-                    write(&mut writer, &bytes);
-                }
-                Some(ServerResponce::Sounds(sounds)) => {
-                    let bytes = bitcode::serialize(&ServerMessage::Sounds(sounds))
-                        .map_err(|_| ())
-                        .unwrap();
-                    // bytes.push(b'\n');
-
-                    write(&mut writer, &bytes);
-                }
-                None => {}
             }
         });
     }

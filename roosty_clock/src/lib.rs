@@ -4,7 +4,7 @@
 
 use std::{
     collections::HashMap,
-    io::{BufReader, BufWriter},
+    io::BufReader,
 };
 
 use alarm_edit::EditingState;
@@ -36,11 +36,11 @@ pub struct Clock {
     alarms: HashMap<u64, roosty_clockd_config::Alarm>,
     sounds: HashMap<String, roosty_clockd_config::Sound>,
     recv: BufReader<RecvHalf>,
-    send: BufWriter<SendHalf>,
+    send: SendHalf,
 }
 
 pub fn send_to_server(
-    w: &mut BufWriter<SendHalf>,
+    w: &mut SendHalf,
     message: roosty_clockd::ClientMessage,
 ) -> Result<(), ()> {
     let bytes = bitcode::serialize(&message).map_err(|_| ())?;
@@ -52,16 +52,16 @@ pub fn recieve_from_server(
     conn: &mut BufReader<RecvHalf>,
 ) -> Result<roosty_clockd::ServerMessage, ()> {
     let mut bytes = Vec::new();
-    roosty_clockd::read(conn, &mut bytes).map_err(|e| {
-        println!("e: {e}");
+    roosty_clockd::read(conn, &mut bytes).map_err(|_e| {
+        // println!("e: {e}");
         ();
     })?;
-    println!("got {bytes:?}");
-    bytes.pop();
-    println!("got {bytes:?}");
+    // println!("got {bytes:?}");
+    // bytes.pop();
+    // println!("got {bytes:?}");
 
-    bitcode::deserialize(&bytes).map_err(|e| {
-        println!("e1: {e}");
+    bitcode::deserialize(&bytes).map_err(|_e| {
+        // println!("e1: {e}");
         ();
     })
 }
@@ -96,7 +96,7 @@ impl Default for AlarmBuilder {
 impl Clock {
     #[must_use]
     pub fn new(
-        send: BufWriter<SendHalf>,
+        send: SendHalf,
         recv: BufReader<RecvHalf>,
         sounds: HashMap<String, roosty_clockd_config::Sound>,
         alarms: HashMap<u64, roosty_clockd_config::Alarm>,

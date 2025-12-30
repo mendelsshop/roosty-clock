@@ -9,7 +9,7 @@
 use std::{
     collections::HashMap,
     error::Error,
-    io::{BufReader, BufWriter},
+    io::BufReader,
     path::PathBuf,
 };
 
@@ -71,9 +71,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let conn = get_socket()?;
-    let (recv, send) = conn.split();
+    let (recv, mut send) = conn.split();
     let mut recv = BufReader::new(recv);
-    let mut send = BufWriter::new(send);
+    // let mut send = BufWriter::new(send);
     let alarms = get_alarms(&mut recv, &mut send);
     let sounds = get_sounds(&mut recv, &mut send);
 
@@ -92,7 +92,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn get_alarms(
     recv: &mut BufReader<RecvHalf>,
-    send: &mut BufWriter<SendHalf>,
+    send: &mut SendHalf,
 ) -> HashMap<u64, roosty_clockd::config::Alarm> {
     roosty_clock::send_to_server(send, roosty_clockd::ClientMessage::GetAlarms).unwrap();
 
@@ -109,7 +109,7 @@ fn get_alarms(
 
 fn get_sounds(
     recv: &mut BufReader<RecvHalf>,
-    send: &mut BufWriter<SendHalf>,
+    send: &mut SendHalf,
 ) -> HashMap<String, roosty_clockd::config::Sound> {
     roosty_clock::send_to_server(send, roosty_clockd::ClientMessage::GetSounds);
 
