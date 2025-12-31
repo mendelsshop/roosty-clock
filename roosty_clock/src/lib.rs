@@ -2,7 +2,11 @@
 #![deny(clippy::use_self, rust_2018_idioms)]
 #![allow(clippy::multiple_crate_versions, clippy::module_name_repetitions)]
 
-use std::{collections::HashMap, io::BufReader, mem};
+use std::{
+    collections::HashMap,
+    io::{BufRead, BufReader},
+    mem,
+};
 
 use alarm_edit::EditingState;
 use chrono::Timelike;
@@ -13,7 +17,7 @@ use eframe::egui::{
 use interprocess::local_socket::{RecvHalf, SendHalf};
 
 pub mod config;
-use roosty_clockd::{config as roosty_clockd_config, ServerMessage};
+use roosty_clockd::{ServerMessage, config as roosty_clockd_config};
 
 /// implementation of alarm editing for egui
 pub mod alarm_edit;
@@ -39,7 +43,6 @@ pub struct Clock {
 
 pub fn send_to_server(w: &mut SendHalf, message: roosty_clockd::ClientMessage) -> Result<(), ()> {
     let bytes = bitcode::serialize(&message).map_err(|_| ())?;
-    // bytes.push(b'\n');
 
     roosty_clockd::write(w, &bytes).map_err(|_| ()).map(|_| ())
 }
@@ -48,15 +51,10 @@ pub fn recieve_from_server(
 ) -> Result<roosty_clockd::ServerMessage, ()> {
     let mut bytes = Vec::new();
     roosty_clockd::read(conn, &mut bytes).map_err(|_e| {
-        // println!("e: {e}");
         ();
     })?;
-    // println!("got {bytes:?}");
-    // bytes.pop();
-    // println!("got {bytes:?}");
 
     bitcode::deserialize(&bytes).map_err(|_e| {
-        // println!("e1: {e}");
         ();
     })
 }
@@ -217,6 +215,22 @@ impl eframe::App for Clock {
                     self.adding_alarm = None;
                 }
                 _ => {}
+            }
+        }
+        if self.recv.fill_buf().is_ok()
+            && let Ok(message) = recieve_from_server(&mut self.recv)
+        {
+            match message {
+                ServerMessage::Alarms(_) => unreachable!(),
+                ServerMessage::AlarmSet(_, _alarm_edit) => todo!(),
+                ServerMessage::AlaramAdded(_alarm) => todo!(),
+                ServerMessage::AlarmRemoved(_) => todo!(),
+                ServerMessage::Sounds(_) => unreachable!(),
+                ServerMessage::SoundAdded(_sound) => todo!(),
+                ServerMessage::SoundRemoved(_) => todo!(),
+                ServerMessage::AlarmRinging(_) => todo!(),
+                ServerMessage::AlarmStopped(_) => todo!(),
+                ServerMessage::UID(_) => unreachable!(),
             }
         }
         // header

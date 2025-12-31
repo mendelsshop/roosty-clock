@@ -77,19 +77,18 @@ where
         // how many different values there are
         // the angle (degrees) for each part
         let part_angle = 360. / (values.clone().count() as f32);
-        if responce.dragged() || responce.clicked() {
-            if let Some(new_value) = responce.interact_pointer_pos() {
-                // inverse of the math for drawing the point (see below) from the (index of a) value
-                // since we are converting the point into (the index of a) value
-                let angle = ((new_value - rect.center()).angle().to_degrees() + 90.)
-                    .rem_euclid(360.)
-                    / part_angle;
-                let n = angle.floor() as usize;
-                index = n;
-                *value = values.clone().nth(n).unwrap().value;
+        if (responce.dragged() || responce.clicked())
+            && let Some(new_value) = responce.interact_pointer_pos()
+        {
+            // inverse of the math for drawing the point (see below) from the (index of a) value
+            // since we are converting the point into (the index of a) value
+            let angle = ((new_value - rect.center()).angle().to_degrees() + 90.).rem_euclid(360.)
+                / part_angle;
+            let n = angle.floor() as usize;
+            index = n;
+            *value = values.clone().nth(n).unwrap().value;
 
-                responce.mark_changed();
-            }
+            responce.mark_changed();
         }
         let visuals = ui.style().interact(&responce);
         ui.painter().circle_filled(

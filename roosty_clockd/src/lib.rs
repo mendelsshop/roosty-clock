@@ -44,7 +44,7 @@ pub enum ServerMessage {
     AlarmRemoved(u64),
     Sounds(HashMap<String, config::Sound>),
     SoundAdded(config::Sound),
-    SoundRemoved(u64),
+    SoundRemoved(String),
     AlarmRinging(u64),
     AlarmStopped(u64),
     UID(u64),

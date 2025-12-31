@@ -123,7 +123,7 @@ fn main() -> std::io::Result<()> {
                                     AlarmEdit::Enable(new_enabled) => alarm.enabled = new_enabled,
                                 }
                                 let alarm = config.alarms.data.get(&id).unwrap();
-                                alarm_timers.insert(
+                                drop(alarm_timers.insert(
                                     alarm.id,
                                     alarm_to_timer(
                                         &config,
@@ -132,7 +132,7 @@ fn main() -> std::io::Result<()> {
                                         alarm,
                                         s.clone(),
                                     ),
-                                );
+                                ));
                             }
                         }
                         Alert::AlaramAdded(alarm) => {
@@ -145,7 +145,7 @@ fn main() -> std::io::Result<()> {
                                 rang_today: false,
                                 id: alarm.id,
                             };
-                            alarm_timers.insert(
+                            drop(alarm_timers.insert(
                                 alarm.id,
                                 alarm_to_timer(
                                     &config,
@@ -154,12 +154,12 @@ fn main() -> std::io::Result<()> {
                                     &alarm,
                                     s.clone(),
                                 ),
-                            );
+                            ));
                             config.alarms.insert(alarm);
                         }
                         Alert::AlarmRemoved(id) => {
                             config.alarms.data.remove(&id).unwrap();
-                            alarm_timers.remove(&id).unwrap();
+                            drop(alarm_timers.remove(&id).unwrap());
                         }
                         Alert::SoundAdded(sound) => {
                             config.sounds.sounds.insert(sound.name.clone(), sound);
@@ -170,16 +170,18 @@ fn main() -> std::io::Result<()> {
                         Alert::AlarmRinging(_) => {}
                         Alert::AlarmStopped(id) => {
                             if let Some(alarm) = config.alarms.data.get(&id) {
-                                alarm_timers.insert(
-                                    id,
-                                    alarm_to_timer(
-                                        &config,
-                                        &timer,
-                                        chrono::Local::now()
-                                            .checked_add_days(Days::new(0))
-                                            .unwrap(),
-                                        alarm,
-                                        s.clone(),
+                                drop(
+                                    alarm_timers.insert(
+                                        id,
+                                        alarm_to_timer(
+                                            &config,
+                                            &timer,
+                                            chrono::Local::now()
+                                                .checked_add_days(Days::new(0))
+                                                .unwrap(),
+                                            alarm,
+                                            s.clone(),
+                                        ),
                                     ),
                                 );
                             }
@@ -296,6 +298,19 @@ fn main() -> std::io::Result<()> {
                     roosty_clockd::write(&mut writer, &message);
                 }
 
+                if let Ok(message) = _r.recv_timeout(Duration::from_millis(10)) {
+                    let message = match message {
+                        Alert::AlarmSet(id, alarm_edit) => ServerMessage::AlarmSet(id, alarm_edit),
+                        Alert::AlaramAdded(alarm) => ServerMessage::AlaramAdded(alarm),
+                        Alert::AlarmRemoved(id) => ServerMessage::AlarmRemoved(id),
+                        Alert::SoundAdded(sound) => ServerMessage::SoundAdded(sound),
+                        Alert::SoundRemoved(sound) => ServerMessage::SoundRemoved(sound),
+                        Alert::AlarmRinging(id) => ServerMessage::AlarmRinging(id),
+                        Alert::AlarmStopped(id) => ServerMessage::AlarmStopped(id),
+                    };
+                    let message = bitcode::serialize(&message).unwrap();
+                    roosty_clockd::write(&mut writer, &message);
+                }
                 // Now that the receive has come through and the client is waiting on the server's send, do
                 // it. (`.get_mut()` is to get the sender, `BufReader` doesn't implement a pass-through
                 // `Write`.)

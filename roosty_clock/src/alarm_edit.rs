@@ -5,8 +5,8 @@ use eframe::egui::{self, DragValue, Id, ScrollArea, Widget, Window};
 use roosty_clockd::config;
 
 use crate::{
-    widgets::{Knob, Value},
     AlarmBuilder, TimeOfDay,
+    widgets::{Knob, Value},
 };
 
 impl AlarmBuilder {

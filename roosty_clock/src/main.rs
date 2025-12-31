@@ -11,9 +11,9 @@ use std::{collections::HashMap, error::Error, io::BufReader, path::PathBuf};
 use clap::{Parser, Subcommand};
 use eframe::{egui::ViewportBuilder, run_native};
 use interprocess::local_socket::{
-    prelude::*, GenericFilePath, GenericNamespaced, RecvHalf, SendHalf, Stream,
+    GenericFilePath, GenericNamespaced, RecvHalf, SendHalf, Stream, prelude::*,
 };
-use roosty_clock::{config::Config, Clock};
+use roosty_clock::{Clock, config::Config};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

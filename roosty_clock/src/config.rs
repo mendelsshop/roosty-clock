@@ -5,7 +5,7 @@ use eframe::egui;
 use roosty_clockd::config::{self, Alarm};
 use serde::{Deserialize, Serialize};
 
-use crate::{send_to_server, AlarmBuilder, Clock, TimeOfDay};
+use crate::{AlarmBuilder, Clock, TimeOfDay, send_to_server};
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Theme {
