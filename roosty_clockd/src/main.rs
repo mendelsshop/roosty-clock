@@ -19,7 +19,6 @@ use std::fs;
 use std::io::{self, BufReader, prelude::*};
 use std::sync::mpsc;
 use std::thread;
-use std::time::Duration;
 use timer::{Guard, Timer};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -93,7 +92,7 @@ fn main() -> std::io::Result<()> {
         x => x?,
     };
 
-    // listener.set_nonblocking(interprocess::local_socket::ListenerNonblockingMode::Stream);
+    listener.set_nonblocking(interprocess::local_socket::ListenerNonblockingMode::Stream);
     eprintln!("Server running at {printname}");
 
     let (s, r) = crossbeam_channel::unbounded();
@@ -111,7 +110,7 @@ fn main() -> std::io::Result<()> {
         let (s, r) = (s.clone(), r.clone());
         thread::spawn(move || {
             loop {
-                if let Ok(m) = r.recv_timeout(Duration::from_millis(10)) {
+                if let Ok(m) = r.try_recv() {
                     match m {
                         Alert::AlarmSet(id, alarm_edit) => {
                             if let Some(alarm) = config.alarms.data.get_mut(&id) {
@@ -188,7 +187,7 @@ fn main() -> std::io::Result<()> {
                         }
                     }
                 }
-                if let Ok(ServerCommand { kind, reciever }) = r_server.recv() {
+                if let Ok(ServerCommand { kind, reciever }) = r_server.try_recv() {
                     println!("got message");
                     match kind {
                         ServerCommandKind::NewUID => {
@@ -288,7 +287,7 @@ fn main() -> std::io::Result<()> {
                         ClientMessage::StopAlarm(i) => s.send(Alert::AlarmStopped(i)).unwrap(),
                     }
                 }
-                if let Ok(message) = _r_client.recv_timeout(Duration::from_millis(10)) {
+                if let Ok(message) = _r_client.try_recv() {
                     let message = match message {
                         ServerResponce::NewUID(id) => ServerMessage::UID(id),
                         ServerResponce::Alarms(alarms) => ServerMessage::Alarms(alarms),
@@ -298,7 +297,7 @@ fn main() -> std::io::Result<()> {
                     roosty_clockd::write(&mut writer, &message);
                 }
 
-                if let Ok(message) = _r.recv_timeout(Duration::from_millis(10)) {
+                if let Ok(message) = _r.try_recv() {
                     let message = match message {
                         Alert::AlarmSet(id, alarm_edit) => ServerMessage::AlarmSet(id, alarm_edit),
                         Alert::AlaramAdded(alarm) => ServerMessage::AlaramAdded(alarm),

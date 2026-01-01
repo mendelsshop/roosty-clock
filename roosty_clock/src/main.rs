@@ -94,7 +94,7 @@ fn get_alarms(
 
     println!("alarms");
     if let Ok(roosty_clockd::ServerMessage::Alarms(alarms)) =
-        roosty_clock::recieve_from_server(recv)
+        roosty_clock::recieve_from_server(recv, true)
     {
         alarms
     } else {
@@ -110,7 +110,7 @@ fn get_sounds(
 
     println!("sounds");
     if let Ok(roosty_clockd::ServerMessage::Sounds(sounds)) =
-        roosty_clock::recieve_from_server(recv)
+        roosty_clock::recieve_from_server(recv, true)
     {
         sounds
     } else {
@@ -125,5 +125,7 @@ fn get_socket() -> Result<LocalSocketStream, Box<dyn Error + 'static>> {
         "/tmp/roosty-clockd.sock".to_fs_name::<GenericFilePath>()?
     };
     let conn = Stream::connect(name)?;
+    conn.set_nonblocking(true);
+
     Ok(conn)
 }

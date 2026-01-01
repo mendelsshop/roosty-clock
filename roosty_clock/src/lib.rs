@@ -4,7 +4,7 @@
 
 use std::{
     collections::HashMap,
-    io::{BufRead, BufReader},
+    io::{BufReader, ErrorKind},
     mem,
 };
 
@@ -48,11 +48,18 @@ pub fn send_to_server(w: &mut SendHalf, message: roosty_clockd::ClientMessage) -
 }
 pub fn recieve_from_server(
     conn: &mut BufReader<RecvHalf>,
+    block: bool,
 ) -> Result<roosty_clockd::ServerMessage, ()> {
     let mut bytes = Vec::new();
-    roosty_clockd::read(conn, &mut bytes).map_err(|_e| {
-        ();
-    })?;
+    match roosty_clockd::read(conn, &mut bytes) {
+        Ok(()) => {}
+        Err(e) if e.kind() == ErrorKind::WouldBlock && block => {
+            return recieve_from_server(conn, block);
+        }
+        Err(_) => {
+            return Err(());
+        }
+    }
 
     bitcode::deserialize(&bytes).map_err(|_e| {
         ();
@@ -217,9 +224,7 @@ impl eframe::App for Clock {
                 _ => {}
             }
         }
-        if self.recv.fill_buf().is_ok()
-            && let Ok(message) = recieve_from_server(&mut self.recv)
-        {
+        if let Ok(message) = recieve_from_server(&mut self.recv, false) {
             match message {
                 ServerMessage::Alarms(_) => unreachable!(),
                 ServerMessage::AlarmSet(_, _alarm_edit) => todo!(),
@@ -239,7 +244,7 @@ impl eframe::App for Clock {
         CentralPanel::default().show(ctx, |ui| {
             if ui.button("+").on_hover_text("add alarm").clicked() {
                 send_to_server(&mut self.send, roosty_clockd::ClientMessage::GetNewUID);
-                if let Ok(ServerMessage::UID(id)) = recieve_from_server(&mut self.recv) {
+                if let Ok(ServerMessage::UID(id)) = recieve_from_server(&mut self.recv, true) {
                     self.adding_alarm = Some(AlarmBuilder {
                         sound: self.config.default_sound.clone(),
                         id,
