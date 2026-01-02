@@ -103,7 +103,14 @@ fn main() -> std::io::Result<()> {
         HashMap::from_iter(config.alarms.data.iter().map(|(id, alarm)| {
             (
                 *id,
-                alarm_to_timer(&config, &timer, chrono::Local::now(), alarm, s.clone()),
+                alarm_to_timer(
+                    &config,
+                    &timer,
+                    chrono::Local::now(),
+                    alarm,
+                    s.clone(),
+                    r.clone(),
+                ),
             )
         }));
     {
@@ -111,6 +118,7 @@ fn main() -> std::io::Result<()> {
         thread::spawn(move || {
             loop {
                 if let Ok(m) = r.try_recv() {
+                    println!("alart");
                     match m {
                         Alert::AlarmSet(id, alarm_edit) => {
                             if let Some(alarm) = config.alarms.data.get_mut(&id) {
@@ -130,6 +138,7 @@ fn main() -> std::io::Result<()> {
                                         chrono::Local::now(),
                                         alarm,
                                         s.clone(),
+                                        r.clone(),
                                     ),
                                 ));
                             }
@@ -152,6 +161,7 @@ fn main() -> std::io::Result<()> {
                                     chrono::Local::now(),
                                     &alarm,
                                     s.clone(),
+                                    r.clone(),
                                 ),
                             ));
                             config.alarms.insert(alarm);
@@ -176,16 +186,18 @@ fn main() -> std::io::Result<()> {
                                             &config,
                                             &timer,
                                             chrono::Local::now()
-                                                .checked_add_days(Days::new(0))
+                                                .checked_add_days(Days::new(1))
                                                 .unwrap(),
                                             alarm,
                                             s.clone(),
+                                            r.clone(),
                                         ),
                                     ),
                                 );
                             }
                         }
                     }
+                    println!("{config:?}");
                 }
                 if let Ok(ServerCommand { kind, reciever }) = r_server.try_recv() {
                     println!("got message");
@@ -231,7 +243,7 @@ fn main() -> std::io::Result<()> {
             // be simultaneous without threads or async, we can deadlock the two processes by having
             // both sides wait for the send buffer to be emptied by the other.
             loop {
-                println!("waiting");
+                // println!("waiting");
                 // TODO: maybe reading shouldn't block
                 if read(&mut reader, &mut buffer).is_ok()
                     && let Ok(message) = {
@@ -264,6 +276,7 @@ fn main() -> std::io::Result<()> {
                             s.send(Alert::AlarmSet(alarm, alarm_edit)).unwrap();
                         }
                         ClientMessage::AddAlarm(alarm) => {
+                            println!("add alarm");
                             s.send(Alert::AlaramAdded(alarm)).unwrap();
                         }
                         ClientMessage::RemoveAlarm(id) => {
@@ -332,6 +345,7 @@ fn alarm_to_timer(
     time: DateTime<chrono::Local>,
     alarm: &config::Alarm,
     s: crossbeam_channel::Sender<Alert>,
+    r: crossbeam_channel::Receiver<Alert>,
 ) -> Guard {
     let date = time.with_time(alarm.time).unwrap();
     let path = config.sounds.sounds.get(&alarm.sound).unwrap().path.clone();
@@ -352,6 +366,17 @@ fn alarm_to_timer(
             sink.append(input);
             sink.play();
             loop {
+                match r.try_recv() {
+                    Ok(
+                        Alert::AlarmStopped(alarm)
+                        | Alert::AlarmRemoved(alarm)
+                        | Alert::AlarmSet(alarm, _),
+                    ) if id == alarm => {
+                        println!("stopping");
+                        break;
+                    }
+                    _ => (),
+                }
                 cpvc::set_mute(false);
             }
         }
