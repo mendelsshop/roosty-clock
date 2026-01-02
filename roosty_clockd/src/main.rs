@@ -142,6 +142,7 @@ fn main() -> std::io::Result<()> {
                                     ),
                                 ));
                             }
+                            config.save(Config::config_path());
                         }
                         Alert::AlaramAdded(alarm) => {
                             let alarm = config::Alarm {
@@ -165,16 +166,20 @@ fn main() -> std::io::Result<()> {
                                 ),
                             ));
                             config.alarms.insert(alarm);
+                            config.save(Config::config_path());
                         }
                         Alert::AlarmRemoved(id) => {
                             config.alarms.data.remove(&id).unwrap();
                             drop(alarm_timers.remove(&id).unwrap());
+                            config.save(Config::config_path());
                         }
                         Alert::SoundAdded(sound) => {
                             config.sounds.sounds.insert(sound.name.clone(), sound);
+                            config.save(Config::config_path());
                         }
                         Alert::SoundRemoved(sound) => {
                             config.sounds.sounds.remove(&sound).unwrap();
+                            config.save(Config::config_path());
                         }
                         Alert::AlarmRinging(_) => {}
                         Alert::AlarmStopped(id) => {
