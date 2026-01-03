@@ -17,7 +17,10 @@ use eframe::egui::{
 use interprocess::local_socket::{RecvHalf, SendHalf};
 
 pub mod config;
-use roosty_clockd::{ServerMessage, config as roosty_clockd_config};
+use roosty_clockd::{
+    ServerMessage,
+    config::{self as roosty_clockd_config, Alarm},
+};
 
 /// implementation of alarm editing for egui
 pub mod alarm_edit;
@@ -227,14 +230,42 @@ impl eframe::App for Clock {
         if let Ok(message) = recieve_from_server(&mut self.recv, false) {
             match message {
                 ServerMessage::Alarms(_) => unreachable!(),
-                ServerMessage::AlarmSet(_, _alarm_edit) => todo!(),
-                ServerMessage::AlaramAdded(_alarm) => todo!(),
-                ServerMessage::AlarmRemoved(_) => todo!(),
+                ServerMessage::AlarmSet(id, alarm_edit) => {
+                    let alarm = self.alarms.get_mut(&id).unwrap();
+                    match alarm_edit {
+                        roosty_clockd::AlarmEdit::Time(new_time) => alarm.time = new_time,
+                        roosty_clockd::AlarmEdit::Name(new_name) => alarm.name = new_name,
+                        roosty_clockd::AlarmEdit::Sound(new_sound) => alarm.sound = new_sound,
+                        roosty_clockd::AlarmEdit::Volume(new_volume) => alarm.volume = new_volume,
+                        roosty_clockd::AlarmEdit::Enable(new_enable) => alarm.enabled = new_enable,
+                    }
+                }
+                ServerMessage::AlaramAdded(alarm) => {
+                    self.alarms.insert(
+                        alarm.id,
+                        Alarm {
+                            name: alarm.name,
+                            time: alarm.time,
+                            volume: alarm.volume,
+                            sound: alarm.sound,
+                            enabled: true,
+                            rang_today: false,
+                            id: alarm.id,
+                        },
+                    );
+                }
+                ServerMessage::AlarmRemoved(id) => {
+                    self.alarms.remove(&id);
+                }
                 ServerMessage::Sounds(_) => unreachable!(),
-                ServerMessage::SoundAdded(_sound) => todo!(),
-                ServerMessage::SoundRemoved(_) => todo!(),
-                ServerMessage::AlarmRinging(_) => todo!(),
-                ServerMessage::AlarmStopped(_) => todo!(),
+                ServerMessage::SoundAdded(sound) => {
+                    self.sounds.insert(sound.name.clone(), sound);
+                }
+                ServerMessage::SoundRemoved(sounds) => {
+                    self.sounds.remove(&sounds);
+                }
+                ServerMessage::AlarmRinging(_) => {}
+                ServerMessage::AlarmStopped(_) => {}
                 ServerMessage::UID(_) => unreachable!(),
             }
         }
