@@ -95,11 +95,11 @@ fn main() -> std::io::Result<()> {
     listener.set_nonblocking(interprocess::local_socket::ListenerNonblockingMode::Stream);
     eprintln!("Server running at {printname}");
 
-    let (s, r) = crossbeam_channel::unbounded();
+    let (s, r) = async_broadcast::broadcast(10);
     let (s_server, r_server) = mpsc::channel();
 
     let timer = Timer::new();
-    let mut alarm_timers: HashMap<u64, Guard> =
+    let mut alarm_timers: HashMap<u64, _> =
         HashMap::from_iter(config.alarms.data.iter().map(|(id, alarm)| {
             (
                 *id,
@@ -109,12 +109,12 @@ fn main() -> std::io::Result<()> {
                     chrono::Local::now(),
                     alarm,
                     s.clone(),
-                    r.clone(),
+                    r.new_receiver(),
                 ),
             )
         }));
     {
-        let (s, r) = (s.clone(), r.clone());
+        let (s, mut r) = (s.clone(), r.new_receiver());
         thread::spawn(move || {
             loop {
                 if let Ok(m) = r.try_recv() {
@@ -138,7 +138,7 @@ fn main() -> std::io::Result<()> {
                                         chrono::Local::now(),
                                         alarm,
                                         s.clone(),
-                                        r.clone(),
+                                        r.new_receiver(),
                                     ),
                                 ));
                             }
@@ -162,7 +162,7 @@ fn main() -> std::io::Result<()> {
                                     chrono::Local::now(),
                                     &alarm,
                                     s.clone(),
-                                    r.clone(),
+                                    r.new_receiver(),
                                 ),
                             ));
                             config.alarms.insert(alarm);
@@ -195,7 +195,7 @@ fn main() -> std::io::Result<()> {
                                                 .unwrap(),
                                             alarm,
                                             s.clone(),
-                                            r.clone(),
+                                            r.new_receiver(),
                                         ),
                                     ),
                                 );
@@ -226,9 +226,17 @@ fn main() -> std::io::Result<()> {
             }
         });
     }
+    // problem with the crossbeam channel is that a message can only be read once (I think), so we
+    // need an alert reciever for each client, and the main server thread will send to all these
+    // recievers the alert, instead of the alert coming from the client thread that it got the
+    // message from over ipc
+    // so will need a new servercommand to add a new reciever to get alerts (to init a new client)
+    // and also servercommands for any alert sent from the client
+    // also from alarm thread will need connection to server thread to tell when alarm ringing
+    // main problem is that crossbeam is not a broadcaster channel(and bus is to limited)
     for conn in listener.incoming().filter_map(handle_error) {
         // TODO: handle alerts from other threads, has to have access to writer
-        let (s, _r) = (s.clone(), r.clone());
+        let (s, mut _r) = (s.clone(), r.new_receiver());
         let s_server = s_server.clone();
         // let mut conn = BufReader::new(conn);
         let (reader, mut writer) = conn.split();
@@ -278,14 +286,15 @@ fn main() -> std::io::Result<()> {
                                 .unwrap();
                         }
                         ClientMessage::SetAlarm(alarm, alarm_edit) => {
-                            s.send(Alert::AlarmSet(alarm, alarm_edit)).unwrap();
+                            s.broadcast_blocking(Alert::AlarmSet(alarm, alarm_edit))
+                                .unwrap();
                         }
                         ClientMessage::AddAlarm(alarm) => {
                             println!("add alarm");
-                            s.send(Alert::AlaramAdded(alarm)).unwrap();
+                            s.broadcast_blocking(Alert::AlaramAdded(alarm)).unwrap();
                         }
                         ClientMessage::RemoveAlarm(id) => {
-                            s.send(Alert::AlarmRemoved(id)).unwrap();
+                            s.broadcast_blocking(Alert::AlarmRemoved(id)).unwrap();
                         }
                         ClientMessage::GetSounds => {
                             s_server
@@ -296,13 +305,15 @@ fn main() -> std::io::Result<()> {
                                 .unwrap();
                         }
                         ClientMessage::AdddSound(sound) => {
-                            s.send(Alert::SoundAdded(sound)).unwrap();
+                            s.broadcast_blocking(Alert::SoundAdded(sound)).unwrap();
                         }
 
                         ClientMessage::RemoveSound(sound) => {
-                            s.send(Alert::SoundRemoved(sound)).unwrap();
+                            s.broadcast_blocking(Alert::SoundRemoved(sound)).unwrap();
                         }
-                        ClientMessage::StopAlarm(i) => s.send(Alert::AlarmStopped(i)).unwrap(),
+                        ClientMessage::StopAlarm(i) => {
+                            s.broadcast_blocking(Alert::AlarmStopped(i)).unwrap();
+                        }
                     }
                 }
                 if let Ok(message) = _r_client.try_recv() {
@@ -349,8 +360,8 @@ fn alarm_to_timer(
     timer: &Timer,
     time: DateTime<chrono::Local>,
     alarm: &config::Alarm,
-    s: crossbeam_channel::Sender<Alert>,
-    r: crossbeam_channel::Receiver<Alert>,
+    s: async_broadcast::Sender<Alert>,
+    mut r: async_broadcast::Receiver<Alert>,
 ) -> Guard {
     let date = time.with_time(alarm.time).unwrap();
     let path = config.sounds.sounds.get(&alarm.sound).unwrap().path.clone();
@@ -360,7 +371,7 @@ fn alarm_to_timer(
 
     timer.schedule_with_date(date, move || {
         if enabled {
-            s.send(Alert::AlarmRinging(id));
+            s.broadcast_blocking(Alert::AlarmRinging(id));
             let stream_handle = rodio::OutputStreamBuilder::open_default_stream().unwrap();
             let input =
                 decoder::Decoder::new(BufReader::new(std::fs::File::open(path.clone()).unwrap()))
@@ -371,7 +382,7 @@ fn alarm_to_timer(
             sink.append(input);
             sink.play();
             loop {
-                match r.try_recv() {
+                match r.try_recv().inspect(|e| println!("{e:?}")) {
                     Ok(
                         Alert::AlarmStopped(alarm)
                         | Alert::AlarmRemoved(alarm)
@@ -380,7 +391,9 @@ fn alarm_to_timer(
                         println!("stopping");
                         break;
                     }
-                    _ => (),
+                    _e => {
+                        // println!("{e:?}")
+                    }
                 }
                 cpvc::set_mute(false);
             }

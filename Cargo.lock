@@ -3170,6 +3170,7 @@ dependencies = [
 name = "roosty_clockd"
 version = "0.1.0"
 dependencies = [
+ "async-broadcast",
  "bitcode",
  "chrono",
  "cpvc",
