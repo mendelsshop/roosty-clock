@@ -5,7 +5,7 @@
     missing_debug_implementations,
     clippy::missing_panics_doc
 )]
-use chrono::{DateTime, Days};
+use chrono::{DateTime, Days, Duration};
 use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Stream, prelude::*};
 use rodio::{Sink, Source, decoder};
 use roosty_clockd::config::Config;
@@ -366,37 +366,51 @@ fn alarm_to_timer(
     let date = time.with_time(alarm.time).unwrap();
     let path = config.sounds.sounds.get(&alarm.sound).unwrap().path.clone();
     let id = alarm.id;
-    let enabled = alarm.enabled;
+    let mut enabled = alarm.enabled;
     // TODO: if alarm time before current time, add a day.
 
-    timer.schedule_with_date(date, move || {
-        if enabled {
-            s.broadcast_blocking(Alert::AlarmRinging(id));
-            let stream_handle = rodio::OutputStreamBuilder::open_default_stream().unwrap();
-            let input =
-                decoder::Decoder::new(BufReader::new(std::fs::File::open(path.clone()).unwrap()))
-                    .unwrap()
-                    .repeat_infinite();
-            let sink = Sink::connect_new(stream_handle.mixer());
-            // sink.set_volume(volume / 100.0);
-            sink.append(input);
-            sink.play();
-            loop {
-                match r.try_recv().inspect(|e| println!("{e:?}")) {
-                    Ok(
-                        Alert::AlarmStopped(alarm)
-                        | Alert::AlarmRemoved(alarm)
-                        | Alert::AlarmSet(alarm, _),
-                    ) if id == alarm => {
-                        println!("stopping");
-                        break;
-                    }
-                    _e => {
-                        // println!("{e:?}")
-                    }
+    timer.schedule(date, Some(Duration::days(1)), move || {
+        let stream_handle = rodio::OutputStreamBuilder::open_default_stream().unwrap();
+        let input =
+            decoder::Decoder::new(BufReader::new(std::fs::File::open(path.clone()).unwrap()))
+                .unwrap()
+                .repeat_infinite();
+        let sink = Sink::connect_new(stream_handle.mixer());
+        // sink.set_volume(volume / 100.0);
+        sink.append(input);
+        let rang = false;
+        loop {
+            // we won't get message while sleeping so we will need to make our own timer/scheduler
+            // that does recv when "sleeping"
+            match r.try_recv().inspect(|e| println!("{e:?}")) {
+                Ok(
+                    Alert::AlarmStopped(alarm)
+                    | Alert::AlarmRemoved(alarm)
+                    | Alert::AlarmSet(alarm, AlarmEdit::Time(_) | AlarmEdit::Sound(_)),
+                ) if id == alarm => {
+                    println!("stopping");
+                    break;
                 }
-                cpvc::set_mute(false);
+                // if already started ringing just stop the alarm today.
+                Ok(Alert::AlarmSet(alarm, AlarmEdit::Enable(false))) if id == alarm => {
+                    break;
+                }
+                Ok(Alert::AlarmSet(alarm, AlarmEdit::Enable(true))) if id == alarm => {
+                    enabled = true;
+                }
+
+                _e => {
+                    // println!("{e:?}")
+                }
             }
+
+            if enabled {
+                sink.play();
+                if !rang {
+                    s.broadcast_blocking(Alert::AlarmRinging(id));
+                }
+            }
+            cpvc::set_mute(false);
         }
     })
 }
