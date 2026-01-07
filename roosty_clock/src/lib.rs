@@ -12,7 +12,7 @@ use alarm_edit::EditingState;
 use chrono::Timelike;
 use config::{Config, Sound, Theme};
 use eframe::egui::{
-    self, Button, CentralPanel, Context, Grid, Layout, ScrollArea, TopBottomPanel, Window,
+    self, Button, CentralPanel, Context, Grid, Id, Layout, ScrollArea, TopBottomPanel, Window,
 };
 use interprocess::local_socket::{RecvHalf, SendHalf};
 
@@ -42,6 +42,7 @@ pub struct Clock {
     recv: BufReader<RecvHalf>,
     alarm_edits: HashMap<u64, AlarmBuilder>,
     send: SendHalf,
+    ringing: HashMap<u64, String>,
 }
 
 pub fn send_to_server(w: &mut SendHalf, message: roosty_clockd::ClientMessage) -> Result<(), ()> {
@@ -113,6 +114,7 @@ impl Clock {
             recv,
             in_config: false,
             adding_alarm: None,
+            ringing: HashMap::new(),
         }
     }
 
@@ -264,11 +266,37 @@ impl eframe::App for Clock {
                 ServerMessage::SoundRemoved(sounds) => {
                     self.sounds.remove(&sounds);
                 }
-                ServerMessage::AlarmRinging(_) => {}
-                ServerMessage::AlarmStopped(_) => {}
+                ServerMessage::AlarmRinging(id) => {
+                    self.ringing.insert(
+                        id,
+                        self.alarms
+                            .get(&id)
+                            .unwrap()
+                            .name
+                            .clone()
+                            .unwrap_or("alarm".to_string()),
+                    );
+                }
+                ServerMessage::AlarmStopped(id) => {
+                    self.ringing.remove(&id);
+                }
                 ServerMessage::UID(_) => unreachable!(),
             }
         }
+        let mut old = HashMap::new();
+        mem::swap(&mut old, &mut self.ringing);
+        self.ringing = old
+            .into_iter()
+            .filter(|(id, name)| {
+                let mut open = true;
+                Window::new(format!("{name} is ringing"))
+                    .id(Id::new(id))
+                    .show(ctx, |ui| {
+                        open = ui.button("stop").clicked();
+                    });
+                open
+            })
+            .collect();
         // header
         self.render_header(ctx);
         // // show all alarms
