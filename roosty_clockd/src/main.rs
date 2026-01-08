@@ -101,9 +101,11 @@ fn main() -> std::io::Result<()> {
     let _timer = Timer::new();
     {
         let mut sounds = config.sounds.sounds.clone();
+        let s = s.clone();
 
         let alarms = config.alarms.data.clone();
         let mut r = r.new_receiver();
+        let stream_handle = rodio::OutputStreamBuilder::open_default_stream().unwrap();
         thread::spawn(move || {
             let mut alarms: HashMap<_, _> = alarms
                 .into_iter()
@@ -118,8 +120,6 @@ fn main() -> std::io::Result<()> {
                             ..
                         },
                     )| {
-                        let stream_handle =
-                            rodio::OutputStreamBuilder::open_default_stream().unwrap();
                         let path = sounds.get(&sound).unwrap().path.clone();
                         let input = decoder::Decoder::new(BufReader::new(
                             std::fs::File::open(path).unwrap(),
@@ -127,9 +127,13 @@ fn main() -> std::io::Result<()> {
                         .unwrap()
                         .repeat_infinite();
                         let sink = Sink::connect_new(stream_handle.mixer());
+                        sink.pause();
                         sink.set_volume(volume / 100.0);
                         sink.append(input);
-                        (id, (chrono::Local::now().with_time(time), enabled, sink))
+                        (
+                            id,
+                            (chrono::Local::now().with_time(time).unwrap(), enabled, sink),
+                        )
                     },
                 )
                 .collect();
@@ -140,7 +144,7 @@ fn main() -> std::io::Result<()> {
                             if let Some(a) = alarms.get_mut(&id) {
                                 match alarm_edit {
                                     AlarmEdit::Time(naive_time) => {
-                                        a.0 = chrono::Local::now().with_time(naive_time);
+                                        a.0 = chrono::Local::now().with_time(naive_time).unwrap();
                                     }
                                     AlarmEdit::Name(_) => {}
                                     AlarmEdit::Sound(sound) => {
@@ -153,19 +157,23 @@ fn main() -> std::io::Result<()> {
                                         .unwrap()
                                         .repeat_infinite();
                                         a.2.append(input);
+                                        a.2.pause();
                                         if !is_paused {
                                             a.2.play();
                                         }
                                     }
 
                                     AlarmEdit::Volume(volume) => a.2.set_volume(volume / 100.),
-                                    AlarmEdit::Enable(enable) => a.1 = enable,
+                                    AlarmEdit::Enable(enable) => {
+                                        if !enable {
+                                            a.2.stop();
+                                        }
+                                        a.1 = enable;
+                                    }
                                 }
                             }
                         }
                         Alert::AlaramAdded(alarm) => {
-                            let stream_handle =
-                                rodio::OutputStreamBuilder::open_default_stream().unwrap();
                             let path = sounds.get(&alarm.sound).unwrap().path.clone();
                             let input = decoder::Decoder::new(BufReader::new(
                                 std::fs::File::open(path.clone()).unwrap(),
@@ -175,9 +183,14 @@ fn main() -> std::io::Result<()> {
                             let sink = Sink::connect_new(stream_handle.mixer());
                             sink.set_volume(alarm.volume / 100.0);
                             sink.append(input);
+                            sink.pause();
                             alarms.insert(
                                 alarm.id,
-                                (chrono::Local::now().with_time(alarm.time), true, sink),
+                                (
+                                    chrono::Local::now().with_time(alarm.time).unwrap(),
+                                    true,
+                                    sink,
+                                ),
                             );
                         }
                         Alert::AlarmRemoved(id) => {
@@ -202,6 +215,26 @@ fn main() -> std::io::Result<()> {
                 // TODO: iter over alarms and see if any of them need to ring and play, and unmute,
                 // and send ringing alert
                 // maybe also unmute if any alarm is ringing
+                let now = chrono::Local::now() - Duration::minutes(2);
+                for (id, alarm) in alarms
+                    .iter_mut()
+                    .inspect(|(_, _alarm)| {
+                        // println!(
+                        //     "{} {} {} {} {}",
+                        //     alarm.0,
+                        //     now,
+                        //     alarm.0 > now,
+                        //     alarm.1,
+                        //     alarm.2.is_paused()
+                        // )
+                    })
+                    .filter(|(_, alarm)| alarm.1 && alarm.0 > now)
+                    .filter(|(_, alarm)| alarm.2.is_paused())
+                {
+                    // println!("play");
+                    s.broadcast_blocking(Alert::AlarmRinging(*id));
+                    alarm.2.play();
+                }
             }
         });
     }
