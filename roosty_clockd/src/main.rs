@@ -5,7 +5,7 @@
     missing_debug_implementations,
     clippy::missing_panics_doc
 )]
-use chrono::{DateTime, Duration};
+use chrono::Duration;
 use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Stream, prelude::*};
 use rodio::{Sink, Source, decoder};
 use roosty_clockd::config::Config;
@@ -19,7 +19,7 @@ use std::fs;
 use std::io::{self, BufReader, prelude::*};
 use std::sync::mpsc;
 use std::thread;
-use timer::{Guard, Timer};
+use timer::Timer;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Alert {
@@ -95,7 +95,8 @@ fn main() -> std::io::Result<()> {
     listener.set_nonblocking(interprocess::local_socket::ListenerNonblockingMode::Stream);
     eprintln!("Server running at {printname}");
 
-    let (s, r) = async_broadcast::broadcast(10);
+    let (mut s, r) = async_broadcast::broadcast(10);
+    s.set_overflow(true);
     let (s_server, r_server) = mpsc::channel();
 
     let _timer = Timer::new();
@@ -218,42 +219,19 @@ fn main() -> std::io::Result<()> {
                 let now = chrono::Local::now() - Duration::minutes(2);
                 for (id, alarm) in alarms
                     .iter_mut()
-                    .inspect(|(_, _alarm)| {
-                        // println!(
-                        //     "{} {} {} {} {}",
-                        //     alarm.0,
-                        //     now,
-                        //     alarm.0 > now,
-                        //     alarm.1,
-                        //     alarm.2.is_paused()
-                        // )
-                    })
                     .filter(|(_, alarm)| alarm.1 && alarm.0 > now)
                     .filter(|(_, alarm)| alarm.2.is_paused())
                 {
-                    // println!("play");
                     s.broadcast_blocking(Alert::AlarmRinging(*id));
                     alarm.2.play();
+                    cpvc::set_mute(false);
                 }
             }
         });
     }
-    // let mut alarm_timers: HashMap<u64, _> =
-    //     HashMap::from_iter(config.alarms.data.iter().map(|(id, alarm)| {
-    //         (
-    //             *id,
-    //             alarm_to_timer(
-    //                 &config,
-    //                 &timer,
-    //                 chrono::Local::now(),
-    //                 alarm,
-    //                 s.clone(),
-    //                 r.new_receiver(),
-    //             ),
-    //         )
-    //     }));
+
     {
-        let (_s, mut r) = (s.clone(), r.new_receiver());
+        let mut r = r.new_receiver();
         thread::spawn(move || {
             loop {
                 if let Ok(m) = r.try_recv() {
@@ -268,18 +246,6 @@ fn main() -> std::io::Result<()> {
                                     AlarmEdit::Volume(new_volume) => alarm.volume = new_volume,
                                     AlarmEdit::Enable(new_enabled) => alarm.enabled = new_enabled,
                                 }
-                                let _alarm = config.alarms.data.get(&id).unwrap();
-                                // drop(alarm_timers.insert(
-                                //     alarm.id,
-                                //     alarm_to_timer(
-                                //         &config,
-                                //         &timer,
-                                //         chrono::Local::now(),
-                                //         alarm,
-                                //         s.clone(),
-                                //         r.new_receiver(),
-                                //     ),
-                                // ));
                             }
                             config.save(Config::config_path());
                         }
@@ -293,23 +259,11 @@ fn main() -> std::io::Result<()> {
                                 rang_today: false,
                                 id: alarm.id,
                             };
-                            // drop(alarm_timers.insert(
-                            //     alarm.id,
-                            //     alarm_to_timer(
-                            //         &config,
-                            //         &timer,
-                            //         chrono::Local::now(),
-                            //         &alarm,
-                            //         s.clone(),
-                            //         r.new_receiver(),
-                            //     ),
-                            // ));
                             config.alarms.insert(alarm);
                             config.save(Config::config_path());
                         }
                         Alert::AlarmRemoved(id) => {
                             config.alarms.data.remove(&id).unwrap();
-                            // drop(alarm_timers.remove(&id).unwrap());
                             config.save(Config::config_path());
                         }
                         Alert::SoundAdded(sound) => {
@@ -321,25 +275,7 @@ fn main() -> std::io::Result<()> {
                             config.save(Config::config_path());
                         }
                         Alert::AlarmRinging(_) => {}
-                        Alert::AlarmStopped(id) => {
-                            if let Some(_alarm) = config.alarms.data.get(&id) {
-                                // drop(
-                                //     alarm_timers.insert(
-                                //         id,
-                                //         alarm_to_timer(
-                                //             &config,
-                                //             &timer,
-                                //             chrono::Local::now()
-                                //                 .checked_add_days(Days::new(1))
-                                //                 .unwrap(),
-                                //             alarm,
-                                //             s.clone(),
-                                //             r.new_receiver(),
-                                //         ),
-                                //     ),
-                                // );
-                            }
-                        }
+                        Alert::AlarmStopped(_id) => {}
                     }
                     println!("{config:?}");
                 }
@@ -429,8 +365,7 @@ fn main() -> std::io::Result<()> {
                                 .unwrap();
                         }
                         ClientMessage::AddAlarm(alarm) => {
-                            println!("add alarm");
-                            s.broadcast_blocking(Alert::AlaramAdded(alarm)).unwrap();
+                            s.try_broadcast(Alert::AlaramAdded(alarm)).unwrap();
                         }
                         ClientMessage::RemoveAlarm(id) => {
                             s.broadcast_blocking(Alert::AlarmRemoved(id)).unwrap();
@@ -492,64 +427,4 @@ fn main() -> std::io::Result<()> {
     }
 
     Ok(())
-}
-
-fn alarm_to_timer(
-    config: &config::Config,
-    timer: &Timer,
-    time: DateTime<chrono::Local>,
-    alarm: &config::Alarm,
-    s: async_broadcast::Sender<Alert>,
-    mut r: async_broadcast::Receiver<Alert>,
-) -> Guard {
-    let date = time.with_time(alarm.time).unwrap();
-    let path = config.sounds.sounds.get(&alarm.sound).unwrap().path.clone();
-    let id = alarm.id;
-    let mut enabled = alarm.enabled;
-    // TODO: if alarm time before current time, add a day.
-
-    timer.schedule(date, Some(Duration::days(1)), move || {
-        let stream_handle = rodio::OutputStreamBuilder::open_default_stream().unwrap();
-        let input =
-            decoder::Decoder::new(BufReader::new(std::fs::File::open(path.clone()).unwrap()))
-                .unwrap()
-                .repeat_infinite();
-        let sink = Sink::connect_new(stream_handle.mixer());
-        // sink.set_volume(volume / 100.0);
-        sink.append(input);
-        let rang = false;
-        loop {
-            // we won't get message while sleeping so we will need to make our own timer/scheduler
-            // that does recv when "sleeping"
-            match r.try_recv().inspect(|e| println!("{e:?}")) {
-                Ok(
-                    Alert::AlarmStopped(alarm)
-                    | Alert::AlarmRemoved(alarm)
-                    | Alert::AlarmSet(alarm, AlarmEdit::Time(_) | AlarmEdit::Sound(_)),
-                ) if id == alarm => {
-                    println!("stopping");
-                    break;
-                }
-                // if already started ringing just stop the alarm today.
-                Ok(Alert::AlarmSet(alarm, AlarmEdit::Enable(false))) if id == alarm => {
-                    break;
-                }
-                Ok(Alert::AlarmSet(alarm, AlarmEdit::Enable(true))) if id == alarm => {
-                    enabled = true;
-                }
-
-                _e => {
-                    // println!("{e:?}")
-                }
-            }
-
-            if enabled {
-                sink.play();
-                if !rang {
-                    s.broadcast_blocking(Alert::AlarmRinging(id));
-                }
-            }
-            cpvc::set_mute(false);
-        }
-    })
 }

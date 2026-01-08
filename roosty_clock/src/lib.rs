@@ -164,13 +164,13 @@ impl Clock {
         });
     }
 
-    fn list_alarms(&mut self, ui: &mut egui::Ui, skip: usize, ctx: &Context) {
+    fn list_alarms(&mut self, ui: &mut egui::Ui, _skip: usize, ctx: &Context) {
         let collect = self
             .alarms
             .keys()
             .copied()
             .enumerate()
-            .skip(skip)
+            // .skip(skip)
             .collect::<Vec<_>>();
         for (_i, id) in collect {
             if ui.button("x").on_hover_text("delete alarm").clicked() {
@@ -181,8 +181,8 @@ impl Clock {
                 );
 
                 self.alarms.remove(&id);
-                self.list_alarms(ui, 0, ctx);
-                break;
+                // self.list_alarms(ui, 0, ctx);
+                continue;
             }
 
             let _alarm_changed = self.render_alarm(id, ui, ctx);
