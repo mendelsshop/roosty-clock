@@ -267,6 +267,7 @@ impl eframe::App for Clock {
                     self.sounds.remove(&sounds);
                 }
                 ServerMessage::AlarmRinging(id) => {
+                    println!("ringing");
                     self.ringing.insert(
                         id,
                         self.alarms
@@ -288,13 +289,21 @@ impl eframe::App for Clock {
         self.ringing = old
             .into_iter()
             .filter(|(id, name)| {
-                let mut open = true;
+                let mut close = true;
+
                 Window::new(format!("{name} is ringing"))
                     .id(Id::new(id))
                     .show(ctx, |ui| {
-                        open = ui.button("stop").clicked();
+                        close = ui.button("stop").clicked();
+                        if close {
+                            send_to_server(
+                                &mut self.send,
+                                roosty_clockd::ClientMessage::StopAlarm(*id),
+                            );
+                        }
                     });
-                open
+
+                !close
             })
             .collect();
         // header
