@@ -2,18 +2,18 @@ use chrono::NaiveTime;
 use interprocess::local_socket::SendHalf;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{self, Read, Write},
 };
 
 pub mod config;
 #[derive(Debug, Serialize, Deserialize, Clone)]
+
 pub enum ClientMessage {
-    GetAlarms,
+    Init,
     SetAlarm(u64, AlarmEdit),
     AddAlarm(Alarm),
     RemoveAlarm(u64),
-    GetSounds,
     AdddSound(config::Sound),
     RemoveSound(String),
     StopAlarm(u64),
@@ -38,11 +38,14 @@ pub enum AlarmEdit {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ServerMessage {
-    Alarms(HashMap<u64, config::Alarm>),
+    Init {
+        alarms: HashMap<u64, config::Alarm>,
+        sounds: HashMap<String, config::Sound>,
+        ringing_alarms: HashSet<u64>,
+    },
     AlarmSet(u64, AlarmEdit),
     AlaramAdded(Alarm),
     AlarmRemoved(u64),
-    Sounds(HashMap<String, config::Sound>),
     SoundAdded(config::Sound),
     SoundRemoved(String),
     AlarmRinging(u64),

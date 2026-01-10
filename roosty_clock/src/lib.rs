@@ -104,6 +104,7 @@ impl Clock {
         recv: BufReader<RecvHalf>,
         sounds: HashMap<String, roosty_clockd_config::Sound>,
         alarms: HashMap<u64, roosty_clockd_config::Alarm>,
+        ringing: HashMap<u64, String>,
     ) -> Self {
         Self {
             alarm_edits: HashMap::new(),
@@ -114,7 +115,7 @@ impl Clock {
             recv,
             in_config: false,
             adding_alarm: None,
-            ringing: HashMap::new(),
+            ringing,
         }
     }
 
@@ -231,7 +232,6 @@ impl eframe::App for Clock {
         }
         if let Ok(message) = recieve_from_server(&mut self.recv, false) {
             match message {
-                ServerMessage::Alarms(_) => unreachable!(),
                 ServerMessage::AlarmSet(id, alarm_edit) => {
                     let alarm = self.alarms.get_mut(&id).unwrap();
                     match alarm_edit {
@@ -259,7 +259,6 @@ impl eframe::App for Clock {
                 ServerMessage::AlarmRemoved(id) => {
                     self.alarms.remove(&id);
                 }
-                ServerMessage::Sounds(_) => unreachable!(),
                 ServerMessage::SoundAdded(sound) => {
                     self.sounds.insert(sound.name.clone(), sound);
                 }
@@ -282,6 +281,7 @@ impl eframe::App for Clock {
                     self.ringing.remove(&id);
                 }
                 ServerMessage::UID(_) => unreachable!(),
+                ServerMessage::Init { .. } => unreachable!(),
             }
         }
         let mut old = HashMap::new();

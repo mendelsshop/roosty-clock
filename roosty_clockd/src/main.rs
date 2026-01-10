@@ -14,7 +14,7 @@ use roosty_clockd::read;
 use roosty_clockd::{Alarm, AlarmEdit};
 use roosty_clockd::{ClientMessage, ServerMessage};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{self, BufReader, prelude::*};
 use std::sync::mpsc;
@@ -39,14 +39,16 @@ pub struct ServerCommand {
 #[allow(missing_debug_implementations)]
 pub enum ServerResponce {
     NewUID(u64),
-    Alarms(HashMap<u64, config::Alarm>),
-    Sounds(HashMap<String, config::Sound>),
+    Init {
+        alarms: HashMap<u64, config::Alarm>,
+        sounds: HashMap<String, config::Sound>,
+        ringing_alarms: HashSet<u64>,
+    },
 }
 #[allow(missing_debug_implementations)]
 pub enum ServerCommandKind {
     NewUID,
-    GetAlarms,
-    GetSounds,
+    Init,
 }
 
 fn main() -> std::io::Result<()> {
@@ -233,6 +235,7 @@ fn main() -> std::io::Result<()> {
     {
         let mut r = r.new_receiver();
         thread::spawn(move || {
+            let mut ringing_alarms = HashSet::new();
             loop {
                 if let Ok(m) = r.try_recv() {
                     println!("alart");
@@ -240,11 +243,19 @@ fn main() -> std::io::Result<()> {
                         Alert::AlarmSet(id, alarm_edit) => {
                             if let Some(alarm) = config.alarms.data.get_mut(&id) {
                                 match alarm_edit {
-                                    AlarmEdit::Time(new_time) => alarm.time = new_time,
+                                    AlarmEdit::Time(new_time) => {
+                                        ringing_alarms.remove(&id);
+                                        alarm.time = new_time;
+                                    }
                                     AlarmEdit::Name(new_name) => alarm.name = new_name,
                                     AlarmEdit::Sound(new_sound) => alarm.sound = new_sound,
                                     AlarmEdit::Volume(new_volume) => alarm.volume = new_volume,
-                                    AlarmEdit::Enable(new_enabled) => alarm.enabled = new_enabled,
+                                    AlarmEdit::Enable(new_enabled) => {
+                                        if !new_enabled {
+                                            ringing_alarms.remove(&id);
+                                        }
+                                        alarm.enabled = new_enabled;
+                                    }
                                 }
                             }
                             config.save(Config::config_path());
@@ -265,6 +276,7 @@ fn main() -> std::io::Result<()> {
                         Alert::AlarmRemoved(id) => {
                             config.alarms.data.remove(&id).unwrap();
                             config.save(Config::config_path());
+                            ringing_alarms.remove(&id);
                         }
                         Alert::SoundAdded(sound) => {
                             config.sounds.sounds.insert(sound.name.clone(), sound);
@@ -274,8 +286,12 @@ fn main() -> std::io::Result<()> {
                             config.sounds.sounds.remove(&sound).unwrap();
                             config.save(Config::config_path());
                         }
-                        Alert::AlarmRinging(_) => {}
-                        Alert::AlarmStopped(_id) => {}
+                        Alert::AlarmRinging(id) => {
+                            ringing_alarms.insert(id);
+                        }
+                        Alert::AlarmStopped(id) => {
+                            ringing_alarms.remove(&id);
+                        }
                     }
                     println!("{config:?}");
                 }
@@ -285,15 +301,14 @@ fn main() -> std::io::Result<()> {
                         ServerCommandKind::NewUID => {
                             reciever.send(ServerResponce::NewUID(get_uid())).unwrap();
                         }
-                        ServerCommandKind::GetAlarms => {
+                        ServerCommandKind::Init => {
                             println!("get alarms - server server");
                             reciever
-                                .send(ServerResponce::Alarms(config.alarms.data.clone()))
-                                .unwrap();
-                        }
-                        ServerCommandKind::GetSounds => {
-                            reciever
-                                .send(ServerResponce::Sounds(config.sounds.sounds.clone()))
+                                .send(ServerResponce::Init {
+                                    alarms: config.alarms.data.clone(),
+                                    sounds: config.sounds.sounds.clone(),
+                                    ringing_alarms: ringing_alarms.clone(),
+                                })
                                 .unwrap();
                         }
                     }
@@ -352,10 +367,10 @@ fn main() -> std::io::Result<()> {
                                 })
                                 .unwrap();
                         }
-                        ClientMessage::GetAlarms => {
+                        ClientMessage::Init => {
                             s_server
                                 .send(ServerCommand {
-                                    kind: ServerCommandKind::GetAlarms,
+                                    kind: ServerCommandKind::Init,
                                     reciever: s_client.clone(),
                                 })
                                 .unwrap();
@@ -370,14 +385,7 @@ fn main() -> std::io::Result<()> {
                         ClientMessage::RemoveAlarm(id) => {
                             s.broadcast_blocking(Alert::AlarmRemoved(id)).unwrap();
                         }
-                        ClientMessage::GetSounds => {
-                            s_server
-                                .send(ServerCommand {
-                                    kind: ServerCommandKind::GetSounds,
-                                    reciever: s_client.clone(),
-                                })
-                                .unwrap();
-                        }
+
                         ClientMessage::AdddSound(sound) => {
                             s.broadcast_blocking(Alert::SoundAdded(sound)).unwrap();
                         }
@@ -393,8 +401,15 @@ fn main() -> std::io::Result<()> {
                 if let Ok(message) = _r_client.try_recv() {
                     let message = match message {
                         ServerResponce::NewUID(id) => ServerMessage::UID(id),
-                        ServerResponce::Alarms(alarms) => ServerMessage::Alarms(alarms),
-                        ServerResponce::Sounds(sounds) => ServerMessage::Sounds(sounds),
+                        ServerResponce::Init {
+                            alarms,
+                            sounds,
+                            ringing_alarms,
+                        } => ServerMessage::Init {
+                            alarms,
+                            sounds,
+                            ringing_alarms,
+                        },
                     };
                     let message = bitcode::serialize(&message).unwrap();
                     roosty_clockd::write(&mut writer, &message);

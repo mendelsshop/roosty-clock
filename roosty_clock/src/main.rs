@@ -13,7 +13,10 @@ use eframe::{egui::ViewportBuilder, run_native};
 use interprocess::local_socket::{
     GenericFilePath, GenericNamespaced, RecvHalf, SendHalf, Stream, prelude::*,
 };
-use roosty_clock::{Clock, config::Config};
+use roosty_clock::{
+    Clock,
+    config::Config,
+};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -69,8 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (recv, mut send) = conn.split();
     let mut recv = BufReader::new(recv);
     // let mut send = BufWriter::new(send);
-    let alarms = get_alarms(&mut recv, &mut send);
-    let sounds = get_sounds(&mut recv, &mut send);
+    let (alarms, sounds, ringing_alarms) = get_alarms(&mut recv, &mut send);
     println!("done");
 
     // Print out the result, getting the newline for free!
@@ -81,7 +83,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     run_native(
         "Roosty Clock",
         native_options,
-        Box::new(|_| Ok(Box::new(Clock::new(send, recv, sounds, alarms)))),
+        Box::new(|_| Ok(Box::new(Clock::new(send, recv, sounds, alarms, ringing_alarms)))),
     )
     .map_err(std::convert::Into::into)
 }
@@ -89,30 +91,28 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn get_alarms(
     recv: &mut BufReader<RecvHalf>,
     send: &mut SendHalf,
-) -> HashMap<u64, roosty_clockd::config::Alarm> {
-    roosty_clock::send_to_server(send, roosty_clockd::ClientMessage::GetAlarms).unwrap();
+) -> (
+    HashMap<u64, roosty_clockd::config::Alarm>,
+    HashMap<String, roosty_clockd::config::Sound>,
+    HashMap<u64, String>,
+) {
+    roosty_clock::send_to_server(send, roosty_clockd::ClientMessage::Init).unwrap();
 
     println!("alarms");
-    if let Ok(roosty_clockd::ServerMessage::Alarms(alarms)) =
-        roosty_clock::recieve_from_server(recv, true)
+    if let Ok(roosty_clockd::ServerMessage::Init {
+        alarms,
+        ringing_alarms,
+        sounds,
+    }) = roosty_clock::recieve_from_server(recv, true)
     {
-        alarms
-    } else {
-        panic!()
-    }
-}
-
-fn get_sounds(
-    recv: &mut BufReader<RecvHalf>,
-    send: &mut SendHalf,
-) -> HashMap<String, roosty_clockd::config::Sound> {
-    roosty_clock::send_to_server(send, roosty_clockd::ClientMessage::GetSounds);
-
-    println!("sounds");
-    if let Ok(roosty_clockd::ServerMessage::Sounds(sounds)) =
-        roosty_clock::recieve_from_server(recv, true)
-    {
-        sounds
+        let collect = alarms
+            .iter()
+            .filter(|(id, _)| ringing_alarms.contains(*id))
+            .map(|(id, roosty_clockd::config::Alarm { name, .. })| {
+                (*id, name.clone().unwrap_or("alarm".to_string()))
+            })
+            .collect();
+        (alarms, sounds, collect)
     } else {
         panic!()
     }
