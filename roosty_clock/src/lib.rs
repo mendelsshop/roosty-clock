@@ -251,7 +251,6 @@ impl eframe::App for Clock {
                             volume: alarm.volume,
                             sound: alarm.sound,
                             enabled: true,
-                            rang_today: false,
                             id: alarm.id,
                         },
                     );

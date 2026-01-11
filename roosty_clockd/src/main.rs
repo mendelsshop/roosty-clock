@@ -272,7 +272,6 @@ fn main() -> std::io::Result<()> {
                                 volume: alarm.volume,
                                 sound: alarm.sound,
                                 enabled: true,
-                                rang_today: false,
                                 id: alarm.id,
                             };
                             config.alarms.insert(alarm);

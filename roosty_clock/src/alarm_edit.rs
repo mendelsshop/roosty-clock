@@ -35,7 +35,6 @@ impl AlarmBuilder {
             sound: self.sound,
             volume: self.volume,
             enabled: true,
-            rang_today: false,
             id: self.id,
         }
     }

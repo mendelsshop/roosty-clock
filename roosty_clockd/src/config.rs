@@ -188,8 +188,6 @@ pub struct Alarm {
     pub sound: String,
     #[serde(default = "always_true")]
     pub enabled: bool,
-    #[serde(skip)]
-    pub rang_today: bool,
     #[serde(skip, default = "get_uid")]
     pub id: u64,
 }
