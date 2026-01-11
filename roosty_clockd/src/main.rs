@@ -218,10 +218,15 @@ fn main() -> std::io::Result<()> {
                 // TODO: iter over alarms and see if any of them need to ring and play, and unmute,
                 // and send ringing alert
                 // maybe also unmute if any alarm is ringing
-                let now = chrono::Local::now() - Duration::minutes(2);
+                let now = chrono::Local::now();
+                // since we also wait for message, its possible that we wont check for new alarms
+                // to start ringing, so we give a duration of time to check around
+                let minutes = Duration::minutes(1);
+                let before = now;
+                let after = now + minutes;
                 for (id, alarm) in alarms
                     .iter_mut()
-                    .filter(|(_, alarm)| alarm.1 && alarm.0 > now)
+                    .filter(|(_, alarm)| alarm.1 && alarm.0 > before && alarm.0 < after)
                     .filter(|(_, alarm)| alarm.2.is_paused())
                 {
                     s.broadcast_blocking(Alert::AlarmRinging(*id));
