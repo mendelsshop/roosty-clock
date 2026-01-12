@@ -21,7 +21,7 @@ simple_file_logger = "0.4.2"
 log = "0.4.17"
 
 # file selection dialogs
-rfd = "0.16.0"
+rfd = "0.17.1"
 
 # sound crates
 rodio = "0.21.1"
