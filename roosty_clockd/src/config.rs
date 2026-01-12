@@ -166,7 +166,7 @@ pub const fn always_true() -> bool {
 
 static mut UID: u64 = 0;
 pub fn get_uid() -> u64 {
-    // SAFETY: this is only called when we are creating a new alarm which only happens in the main thread
+    // SAFETY: this is only called from main server thread
     unsafe {
         UID += 1;
         UID
@@ -181,7 +181,6 @@ impl GetId<u64> for Alarm {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Alarm {
     pub name: Option<String>,
-    // #[serde(with = "toml_datetime_compat")]
     pub time: NaiveTime,
     pub volume: f32,
     #[serde(default = "Sound::get_default_name")]

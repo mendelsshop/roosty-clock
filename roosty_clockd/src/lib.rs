@@ -55,16 +55,12 @@ pub enum ServerMessage {
 
 pub fn write(w: &mut SendHalf, message: &[u8]) -> io::Result<usize> {
     let mut len = message.len().to_ne_bytes().to_vec();
-    // println!("{len:?}");
     len.extend_from_slice(message);
-    // println!("{len:?}");
     w.write(&len)
 }
 pub fn read<R: Read + ?Sized>(r: &mut R, buf: &mut Vec<u8>) -> io::Result<()> {
     let mut header = 0_usize.to_ne_bytes();
-    // println!("reading header {header:?}");
     r.read_exact(&mut header)?;
-    // println!("read header {header:?}");
     let size = usize::from_ne_bytes(header);
     buf.resize(size, 0);
     r.read_exact(buf.as_mut_slice())

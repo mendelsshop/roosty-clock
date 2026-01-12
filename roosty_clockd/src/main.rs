@@ -19,7 +19,6 @@ use std::fs;
 use std::io::{self, BufReader, prelude::*};
 use std::sync::mpsc;
 use std::thread;
-use timer::Timer;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Alert {
@@ -95,13 +94,11 @@ fn main() -> std::io::Result<()> {
     };
 
     listener.set_nonblocking(interprocess::local_socket::ListenerNonblockingMode::Stream);
-    eprintln!("Server running at {printname}");
 
     let (mut s, r) = async_broadcast::broadcast(10);
     s.set_overflow(true);
     let (s_server, r_server) = mpsc::channel();
 
-    let _timer = Timer::new();
     {
         let mut sounds = config.sounds.sounds.clone();
         let s = s.clone();
@@ -224,13 +221,14 @@ fn main() -> std::io::Result<()> {
                 let minutes = Duration::minutes(1);
                 let before = now;
                 let after = now + minutes;
-                for (id, alarm) in alarms
-                    .iter_mut()
-                    .filter(|(_, alarm)| alarm.1 && alarm.0 > before && alarm.0 < after)
-                    .filter(|(_, alarm)| alarm.2.is_paused())
-                {
-                    s.broadcast_blocking(Alert::AlarmRinging(*id));
-                    alarm.2.play();
+                if alarms.iter_mut().any(|(id, alarm)| {
+                    if alarm.1 && alarm.0 > before && alarm.0 < after && alarm.2.is_paused() {
+                        s.broadcast_blocking(Alert::AlarmRinging(*id));
+                        alarm.2.play();
+                        cpvc::set_mute(false);
+                    }
+                    !alarm.2.is_paused()
+                }) {
                     cpvc::set_mute(false);
                 }
             }
@@ -243,7 +241,6 @@ fn main() -> std::io::Result<()> {
             let mut ringing_alarms = HashSet::new();
             loop {
                 if let Ok(m) = r.try_recv() {
-                    println!("alart");
                     match m {
                         Alert::AlarmSet(id, alarm_edit) => {
                             if let Some(alarm) = config.alarms.data.get_mut(&id) {
@@ -297,16 +294,13 @@ fn main() -> std::io::Result<()> {
                             ringing_alarms.remove(&id);
                         }
                     }
-                    println!("{config:?}");
                 }
                 if let Ok(ServerCommand { kind, reciever }) = r_server.try_recv() {
-                    println!("got message");
                     match kind {
                         ServerCommandKind::NewUID => {
                             reciever.send(ServerResponce::NewUID(get_uid())).unwrap();
                         }
                         ServerCommandKind::Init => {
-                            println!("get alarms - server server");
                             reciever
                                 .send(ServerResponce::Init {
                                     alarms: config.alarms.data.clone(),
@@ -330,38 +324,26 @@ fn main() -> std::io::Result<()> {
     // main problem is that crossbeam is not a broadcaster channel(and bus is to limited)
     for conn in listener.incoming().filter_map(handle_error) {
         // TODO: handle alerts from other threads, has to have access to writer
-        let (s, mut _r) = (s.clone(), r.new_receiver());
+        let (s, mut r) = (s.clone(), r.new_receiver());
         let s_server = s_server.clone();
         // let mut conn = BufReader::new(conn);
         let (reader, mut writer) = conn.split();
 
-        let (s_client, _r_client) = mpsc::channel();
-        thread::spawn(move || -> ! {
-            // let mut reader = BufReader::new(reader);
+        let (s_client, r_client) = mpsc::channel();
+        thread::spawn(move || {
             let mut reader = reader;
-            let mut buffer: Vec<u8> = Vec::new();
+            let mut buffer = Vec::new();
             // Wrap the connection into a buffered receiver right away
             // so that we could receive a single line from it.
-            // let mut conn = BufReader::new(reader);
-            println!("Incoming connection!");
 
             // Since our client example sends first, the server should receive a line and only then
             // send a response. Otherwise, because receiving from and sending to a connection cannot
             // be simultaneous without threads or async, we can deadlock the two processes by having
             // both sides wait for the send buffer to be emptied by the other.
             loop {
-                // println!("waiting");
-                // TODO: maybe reading shouldn't block
                 if read(&mut reader, &mut buffer).is_ok()
-                    && let Ok(message) = {
-                        println!("data found");
-                        bitcode::deserialize(&buffer).map_err(|e| {
-                            println!("ee{e}");
-                            ();
-                        })
-                    }
+                    && let Ok(message) = { bitcode::deserialize(&buffer).map_err(|_| ()) }
                 {
-                    println!("got message {message:?} {buffer:?}");
                     match message {
                         ClientMessage::GetNewUID => {
                             s_server
@@ -402,7 +384,7 @@ fn main() -> std::io::Result<()> {
                         }
                     }
                 }
-                if let Ok(message) = _r_client.try_recv() {
+                if let Ok(message) = r_client.try_recv() {
                     let message = match message {
                         ServerResponce::NewUID(id) => ServerMessage::UID(id),
                         ServerResponce::Init {
@@ -419,7 +401,7 @@ fn main() -> std::io::Result<()> {
                     roosty_clockd::write(&mut writer, &message);
                 }
 
-                if let Ok(message) = _r.try_recv() {
+                if let Ok(message) = r.try_recv() {
                     let message = match message {
                         Alert::AlarmSet(id, alarm_edit) => ServerMessage::AlarmSet(id, alarm_edit),
                         Alert::AlaramAdded(alarm) => ServerMessage::AlaramAdded(alarm),
