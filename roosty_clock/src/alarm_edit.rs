@@ -1,11 +1,12 @@
-use std::{collections::HashMap, iter, path::Path};
+use std::{collections::HashMap, ffi::OsStr, iter, path::Path};
 
 use chrono::NaiveTime;
 use eframe::egui::{self, DragValue, Id, ScrollArea, Widget, Window};
+use interprocess::local_socket::SendHalf;
 use roosty_clockd::config;
 
 use crate::{
-    AlarmBuilder, TimeOfDay,
+    AlarmBuilder, TimeOfDay, send_to_server,
     widgets::{Knob, Value},
 };
 
@@ -43,6 +44,7 @@ impl AlarmBuilder {
         &mut self,
         ui: &mut egui::Ui,
         sounds: &HashMap<String, roosty_clockd::config::Sound>,
+        sender: &mut SendHalf,
     ) {
         ui.horizontal(|ui| {
             ui.label("Alarm Name");
@@ -52,7 +54,7 @@ impl AlarmBuilder {
             self.render_time_editor(ui);
             // // sound editor
             // // ui.separator();
-            self.render_sound_editor(ui, sounds);
+            self.render_sound_editor(ui, sounds, sender);
         });
     }
 
@@ -121,8 +123,9 @@ impl AlarmBuilder {
         &mut self,
         ui: &mut egui::Ui,
         sounds: &HashMap<String, roosty_clockd::config::Sound>,
+        sender: &mut SendHalf,
     ) {
-        Self::render_sound_selector_editor(&mut self.sound, ui, sounds);
+        Self::render_sound_selector_editor(&mut self.sound, ui, sounds, sender);
         self.render_volume_slider(ui);
     }
 
@@ -130,18 +133,20 @@ impl AlarmBuilder {
         sound: &mut String,
         ui: &mut egui::Ui,
         sounds: &HashMap<String, roosty_clockd::config::Sound>,
+        sender: &mut SendHalf,
     ) {
         ui.vertical(|ui| {
             // alarm sound
             Self::render_alarm_sound_selector(sound, ui, sounds);
             // set custom alarm sound stuff
-            Self::render_custom_alarm_sound_editor(sounds, ui);
+            Self::render_custom_alarm_sound_editor(sounds, ui, sender);
         });
     }
 
     fn render_custom_alarm_sound_editor(
         _sounds: &HashMap<String, roosty_clockd::config::Sound>,
         ui: &mut egui::Ui,
+        sender: &mut SendHalf,
     ) {
         if ui.button("Custom").clicked() {
             // TODO: rfd with gnome opens Recents not audio folder https://github.com/PolyMeilex/rfd/issues/237
@@ -157,17 +162,24 @@ impl AlarmBuilder {
 
             // when done in alarm editor which one do we pick if we have multiple alarms
             if let Some(paths) = { file_dialog }.pick_files() {
-                paths.iter().for_each(|_path_name| {
-                    // if let Some(name) = path_name.file_prefix().and_then(OsStr::to_str) {
-                    //     sounds.insert(
-                    //         name.to_string(),
-                    //         roosty_clockd::config::Sound {
-                    //             name: name.to_string(),
-                    //             path: path_name.clone(),
-                    //         },
-                    //     );
-                    // }
-                });
+                send_to_server(
+                    sender,
+                    roosty_clockd::ClientMessage::AddedSounds(
+                        paths
+                            .iter()
+                            .filter_map(|path_name| {
+                                path_name
+                                    .file_prefix()
+                                    .and_then(OsStr::to_str)
+                                    .map(|path| (path_name, path))
+                            })
+                            .map(|(path_name, name)| roosty_clockd::config::Sound {
+                                name: name.to_string(),
+                                path: path_name.clone(),
+                            })
+                            .collect(),
+                    ),
+                );
             }
         }
     }
@@ -203,6 +215,7 @@ impl AlarmBuilder {
         &mut self,
         ctx: &egui::Context,
         sounds: &HashMap<String, roosty_clockd::config::Sound>,
+        sender: &mut SendHalf,
     ) -> EditingState {
         let mut ret = EditingState::Editing;
         // if no alarm name set we need way to differentiate between different alarms
@@ -210,7 +223,7 @@ impl AlarmBuilder {
             .id(Id::new(self.id))
             .collapsible(false)
             .show(ctx, |ui| {
-                self.edit_alarm(ui, sounds);
+                self.edit_alarm(ui, sounds, sender);
                 ui.horizontal(|ui| {
                     if ui.button("done").clicked() {
                         ret = EditingState::Done(self.clone().build());

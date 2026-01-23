@@ -13,10 +13,7 @@ use eframe::{egui::ViewportBuilder, run_native};
 use interprocess::local_socket::{
     GenericFilePath, GenericNamespaced, RecvHalf, SendHalf, Stream, prelude::*,
 };
-use roosty_clock::{
-    Clock,
-    config::Config,
-};
+use roosty_clock::{Clock, config::Config};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -83,7 +80,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     run_native(
         "Roosty Clock",
         native_options,
-        Box::new(|_| Ok(Box::new(Clock::new(send, recv, sounds, alarms, ringing_alarms)))),
+        Box::new(|_| {
+            Ok(Box::new(Clock::new(
+                send,
+                recv,
+                sounds,
+                alarms,
+                ringing_alarms,
+            )))
+        }),
     )
     .map_err(std::convert::Into::into)
 }

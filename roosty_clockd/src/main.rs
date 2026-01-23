@@ -25,7 +25,7 @@ pub enum Alert {
     AlarmSet(u64, AlarmEdit),
     AlaramAdded(Alarm),
     AlarmRemoved(u64),
-    SoundAdded(config::Sound),
+    SoundAdded(Vec<config::Sound>),
     SoundRemoved(String),
     AlarmRinging(u64),
     AlarmStopped(u64),
@@ -198,8 +198,12 @@ fn main() -> std::io::Result<()> {
                                 a.2.stop();
                             }
                         }
-                        Alert::SoundAdded(sound) => {
-                            sounds.insert(sound.name.clone(), sound);
+                        Alert::SoundAdded(new_sounds) => {
+                            sounds.extend(
+                                new_sounds
+                                    .into_iter()
+                                    .map(|sound| (sound.name.clone(), sound)),
+                            );
                         }
                         Alert::SoundRemoved(id) => {
                             sounds.remove(&id);
@@ -279,8 +283,10 @@ fn main() -> std::io::Result<()> {
                             config.save(Config::config_path());
                             ringing_alarms.remove(&id);
                         }
-                        Alert::SoundAdded(sound) => {
-                            config.sounds.sounds.insert(sound.name.clone(), sound);
+                        Alert::SoundAdded(sounds) => {
+                            config
+                                .sounds.sounds
+                                .extend(sounds.into_iter().map(|sound| (sound.name.clone(), sound)));
                             config.save(Config::config_path());
                         }
                         Alert::SoundRemoved(sound) => {
@@ -372,8 +378,8 @@ fn main() -> std::io::Result<()> {
                             s.broadcast_blocking(Alert::AlarmRemoved(id)).unwrap();
                         }
 
-                        ClientMessage::AdddSound(sound) => {
-                            s.broadcast_blocking(Alert::SoundAdded(sound)).unwrap();
+                        ClientMessage::AddedSounds(sounds) => {
+                            s.broadcast_blocking(Alert::SoundAdded(sounds)).unwrap();
                         }
 
                         ClientMessage::RemoveSound(sound) => {
@@ -406,7 +412,7 @@ fn main() -> std::io::Result<()> {
                         Alert::AlarmSet(id, alarm_edit) => ServerMessage::AlarmSet(id, alarm_edit),
                         Alert::AlaramAdded(alarm) => ServerMessage::AlaramAdded(alarm),
                         Alert::AlarmRemoved(id) => ServerMessage::AlarmRemoved(id),
-                        Alert::SoundAdded(sound) => ServerMessage::SoundAdded(sound),
+                        Alert::SoundAdded(sound) => ServerMessage::SoundsAdded(sound),
                         Alert::SoundRemoved(sound) => ServerMessage::SoundRemoved(sound),
                         Alert::AlarmRinging(id) => ServerMessage::AlarmRinging(id),
                         Alert::AlarmStopped(id) => ServerMessage::AlarmStopped(id),
