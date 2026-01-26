@@ -15,7 +15,7 @@ keywords = ["rooster", "alarm", "clock", "alarm-clock"]
 # gui crates
 eframe = { version = "0.33.3" }
 # time crates
-chrono = {version ="0.4.31", features= ["serde"]}
+chrono = {version ="0.4.43", features= ["serde"]}
 # logging crates
 simple_file_logger = "0.4.2"
 log = "0.4.17"
