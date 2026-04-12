@@ -210,7 +210,7 @@ impl eframe::App for Clock {
         }
         // alarm creation
         if let Some(editing) = &mut self.adding_alarm {
-            match editing.render_alarm_editor(ctx, &self.sounds, &mut self.send) {
+            match editing.render_alarm_editor(ctx, &self.sounds, &mut self.send, self.config.max_volume) {
                 EditingState::Done(new_alarm) => {
                     self.adding_alarm = None;
                     self.alarms.insert(new_alarm.id, new_alarm.clone());
@@ -332,7 +332,7 @@ impl eframe::App for Clock {
             mem::swap(&mut old_alarm_edits, &mut self.alarm_edits);
             self.alarm_edits =
                 HashMap::from_iter(old_alarm_edits.into_iter().filter_map(|(id, mut alarm)| {
-                    match alarm.render_alarm_editor(ctx, &self.sounds, &mut self.send) {
+                    match alarm.render_alarm_editor(ctx, &self.sounds, &mut self.send, self.config.max_volume) {
                         EditingState::Cancelled => None,
                         EditingState::Editing => Some((id, alarm)),
                         EditingState::Done(alarm) => {

@@ -45,6 +45,7 @@ impl AlarmBuilder {
         ui: &mut egui::Ui,
         sounds: &HashMap<String, roosty_clockd::config::Sound>,
         sender: &mut SendHalf,
+        max_volume: f32,
     ) {
         ui.horizontal(|ui| {
             ui.label("Alarm Name");
@@ -54,7 +55,7 @@ impl AlarmBuilder {
             self.render_time_editor(ui);
             // // sound editor
             // // ui.separator();
-            self.render_sound_editor(ui, sounds, sender);
+            self.render_sound_editor(ui, sounds, sender, max_volume);
         });
     }
 
@@ -124,9 +125,10 @@ impl AlarmBuilder {
         ui: &mut egui::Ui,
         sounds: &HashMap<String, roosty_clockd::config::Sound>,
         sender: &mut SendHalf,
+        max_volume: f32,
     ) {
         Self::render_sound_selector_editor(&mut self.sound, ui, sounds, sender);
-        self.render_volume_slider(ui);
+        self.render_volume_slider(ui, max_volume);
     }
 
     pub(crate) fn render_sound_selector_editor(
@@ -201,9 +203,9 @@ impl AlarmBuilder {
         });
     }
 
-    pub fn render_volume_slider(&mut self, ui: &mut egui::Ui) {
+    pub fn render_volume_slider(&mut self, ui: &mut egui::Ui, max_volume: f32) {
         ui.add(
-            egui::Slider::new(&mut self.volume, 0.0..=100.0)
+            egui::Slider::new(&mut self.volume, 0.0..=max_volume)
                 .vertical()
                 .integer()
                 .suffix("%")
@@ -216,6 +218,7 @@ impl AlarmBuilder {
         ctx: &egui::Context,
         sounds: &HashMap<String, roosty_clockd::config::Sound>,
         sender: &mut SendHalf,
+        max_volume: f32
     ) -> EditingState {
         let mut ret = EditingState::Editing;
         // if no alarm name set we need way to differentiate between different alarms
@@ -223,7 +226,7 @@ impl AlarmBuilder {
             .id(Id::new(self.id))
             .collapsible(false)
             .show(ctx, |ui| {
-                self.edit_alarm(ui, sounds, sender);
+                self.edit_alarm(ui, sounds, sender, max_volume);
                 ui.horizontal(|ui| {
                     if ui.button("done").clicked() {
                         ret = EditingState::Done(self.clone().build());

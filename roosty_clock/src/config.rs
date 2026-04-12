@@ -41,6 +41,8 @@ pub struct Config {
     pub(crate) theme: Theme,
     // TODO: move to roosty_clockd?
     pub(crate) default_sound: String,
+
+    pub(crate) max_volume: f32,
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Sounds {
@@ -57,6 +59,7 @@ impl Default for Config {
             // TickTock,
             // Rain,
             default_sound: "beep beep".to_string(),
+            max_volume: 150.,
         }
     }
 }
@@ -162,7 +165,7 @@ impl Clock {
             ui.label(format!("alarm sound: {}", alarm.sound));
             if ui
                 .add(
-                    egui::Slider::new(&mut alarm.volume, 0.0..=100.0)
+                    egui::Slider::new(&mut alarm.volume, 0.0..=self.config.max_volume)
                         .integer()
                         .suffix("%")
                         .text("volume"),

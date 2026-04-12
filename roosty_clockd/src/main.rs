@@ -132,7 +132,12 @@ fn main() -> std::io::Result<()> {
                         sink.append(input);
                         (
                             id,
-                            (chrono::Local::now().with_time(time).unwrap(), enabled, sink),
+                            (
+                                chrono::Local::now().with_time(time).unwrap(),
+                                enabled,
+                                sink,
+                                volume,
+                            ),
                         )
                     },
                 )
@@ -190,6 +195,7 @@ fn main() -> std::io::Result<()> {
                                     chrono::Local::now().with_time(alarm.time).unwrap(),
                                     true,
                                     sink,
+                                    alarm.volume,
                                 ),
                             );
                         }
@@ -228,6 +234,7 @@ fn main() -> std::io::Result<()> {
                 if alarms.iter_mut().any(|(id, alarm)| {
                     if alarm.1 && alarm.0 > before && alarm.0 < after && alarm.2.is_paused() {
                         s.broadcast_blocking(Alert::AlarmRinging(*id));
+                        cpvc::set_system_volume((alarm.3 / 100.) as u8);
                         alarm.2.play();
                         cpvc::set_mute(false);
                     }
@@ -284,9 +291,9 @@ fn main() -> std::io::Result<()> {
                             ringing_alarms.remove(&id);
                         }
                         Alert::SoundAdded(sounds) => {
-                            config
-                                .sounds.sounds
-                                .extend(sounds.into_iter().map(|sound| (sound.name.clone(), sound)));
+                            config.sounds.sounds.extend(
+                                sounds.into_iter().map(|sound| (sound.name.clone(), sound)),
+                            );
                             config.save(Config::config_path());
                         }
                         Alert::SoundRemoved(sound) => {
