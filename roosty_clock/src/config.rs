@@ -137,7 +137,6 @@ impl Clock {
         &mut self,
         alarm: u64,
         ui: &mut eframe::egui::Ui,
-        _ctx: &eframe::egui::Context,
     ) -> bool {
         let mut ret = false;
         let alarm: &mut Alarm = self.alarms.get_mut(&alarm).unwrap();

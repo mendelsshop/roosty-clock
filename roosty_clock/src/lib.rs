@@ -11,8 +11,9 @@ use std::{
 use alarm_edit::EditingState;
 use chrono::Timelike;
 use config::{Config, Sound, Theme};
-use eframe::egui::{
-    self, Button, CentralPanel, Context, Grid, Id, Layout, ScrollArea, TopBottomPanel, Window,
+use eframe::{
+    Frame,
+    egui::{self, Button, CentralPanel, Grid, Id, Layout, ScrollArea, TopBottomPanel, Window},
 };
 use interprocess::local_socket::{RecvHalf, SendHalf};
 
@@ -166,7 +167,7 @@ impl Clock {
         });
     }
 
-    fn list_alarms(&mut self, ui: &mut egui::Ui, _skip: usize, ctx: &Context) {
+    fn list_alarms(&mut self, ui: &mut egui::Ui, _skip: usize) {
         let collect = self
             .alarms
             .keys()
@@ -187,7 +188,7 @@ impl Clock {
                 continue;
             }
 
-            let _alarm_changed = self.render_alarm(id, ui, ctx);
+            let _alarm_changed = self.render_alarm(id, ui);
             ui.end_row();
         }
     }
@@ -199,18 +200,23 @@ impl Clock {
 
 impl eframe::App for Clock {
     // TODO: extract into different functions
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut Frame) {
         // ctx.request_repaint();
         // an alarm need to keep state of its been rang today
 
-        ctx.set_visuals(self.config.theme.into());
+        ui.set_visuals(self.config.theme.into());
         // config window
         if self.in_config {
-            self.render_settings(ctx);
+            self.render_settings(ui.ctx());
         }
         // alarm creation
         if let Some(editing) = &mut self.adding_alarm {
-            match editing.render_alarm_editor(ctx, &self.sounds, &mut self.send, self.config.max_volume) {
+            match editing.render_alarm_editor(
+                ui.ctx(),
+                &self.sounds,
+                &mut self.send,
+                self.config.max_volume,
+            ) {
                 EditingState::Done(new_alarm) => {
                     self.adding_alarm = None;
                     self.alarms.insert(new_alarm.id, new_alarm.clone());
@@ -294,7 +300,7 @@ impl eframe::App for Clock {
 
                 Window::new(format!("{name} is ringing"))
                     .id(Id::new(id))
-                    .show(ctx, |ui| {
+                    .show(ui.ctx(), |ui| {
                         close = ui.button("stop").clicked();
                         if close {
                             send_to_server(
@@ -308,9 +314,9 @@ impl eframe::App for Clock {
             })
             .collect();
         // header
-        self.render_header(ctx);
+        self.render_header(ui.ctx());
         // // show all alarms
-        CentralPanel::default().show(ctx, |ui| {
+        CentralPanel::default().show_inside(ui, |ui| {
             if ui.button("+").on_hover_text("add alarm").clicked() {
                 send_to_server(&mut self.send, roosty_clockd::ClientMessage::GetNewUID);
                 if let Ok(ServerMessage::UID(id)) = recieve_from_server(&mut self.recv, true) {
@@ -324,15 +330,20 @@ impl eframe::App for Clock {
 
             ScrollArea::vertical().show(ui, |ui| {
                 Grid::new("alarms").show(ui, |ui| {
-                    self.list_alarms(ui, 0, ctx);
+                    self.list_alarms(ui, 0);
                 });
             });
 
             let mut old_alarm_edits = HashMap::new();
             mem::swap(&mut old_alarm_edits, &mut self.alarm_edits);
             self.alarm_edits =
-                HashMap::from_iter(old_alarm_edits.into_iter().filter_map(|(id, mut alarm)| {
-                    match alarm.render_alarm_editor(ctx, &self.sounds, &mut self.send, self.config.max_volume) {
+                (old_alarm_edits.into_iter().filter_map(|(id, mut alarm)| {
+                    match alarm.render_alarm_editor(
+                        ui.ctx(),
+                        &self.sounds,
+                        &mut self.send,
+                        self.config.max_volume,
+                    ) {
                         EditingState::Cancelled => None,
                         EditingState::Editing => Some((id, alarm)),
                         EditingState::Done(alarm) => {
@@ -350,7 +361,8 @@ impl eframe::App for Clock {
                             None
                         }
                     }
-                }));
+                }))
+                .collect();
         });
     }
 }

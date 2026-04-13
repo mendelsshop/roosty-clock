@@ -7,7 +7,7 @@
 )]
 use chrono::Duration;
 use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Stream, prelude::*};
-use rodio::{Sink, Source, decoder};
+use rodio::{Source, decoder};
 use roosty_clockd::config::Config;
 use roosty_clockd::config::{self, get_uid};
 use roosty_clockd::read;
@@ -105,7 +105,7 @@ fn main() -> std::io::Result<()> {
 
         let alarms = config.alarms.data.clone();
         let mut r = r.new_receiver();
-        let stream_handle = rodio::OutputStreamBuilder::open_default_stream().unwrap();
+        let stream_handle = rodio::DeviceSinkBuilder::open_default_sink().unwrap();
         thread::spawn(move || {
             let mut alarms: HashMap<_, _> = alarms
                 .into_iter()
@@ -126,7 +126,7 @@ fn main() -> std::io::Result<()> {
                         ))
                         .unwrap()
                         .repeat_infinite();
-                        let sink = Sink::connect_new(stream_handle.mixer());
+                        let sink = rodio::Player::connect_new(stream_handle.mixer());
                         sink.pause();
                         sink.set_volume(volume / 100.0);
                         sink.append(input);
@@ -185,7 +185,7 @@ fn main() -> std::io::Result<()> {
                             ))
                             .unwrap()
                             .repeat_infinite();
-                            let sink = Sink::connect_new(stream_handle.mixer());
+                            let sink = rodio::Player::connect_new(stream_handle.mixer());
                             sink.set_volume(alarm.volume / 100.0);
                             sink.append(input);
                             sink.pause();

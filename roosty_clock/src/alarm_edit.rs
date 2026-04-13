@@ -218,7 +218,7 @@ impl AlarmBuilder {
         ctx: &egui::Context,
         sounds: &HashMap<String, roosty_clockd::config::Sound>,
         sender: &mut SendHalf,
-        max_volume: f32
+        max_volume: f32,
     ) -> EditingState {
         let mut ret = EditingState::Editing;
         // if no alarm name set we need way to differentiate between different alarms
